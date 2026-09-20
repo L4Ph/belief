@@ -20,8 +20,9 @@ grammars conventionally keep them. The files are therefore copies:
    ln -sf "$PWD/packages/lsp/dist/bin.mjs" ~/.local/bin/bel-lsp
    ```
 
-2. In `extension.toml`, point `[grammars.bel]` at this repository. Until it has
-   a remote, use a local URL and the current commit:
+2. In `extension.toml`, point `[grammars.bel]` at this repository. While the
+   repository is private (and while the extension is a dev extension), use a
+   local URL and the current commit:
 
    ```toml
    [grammars.bel]

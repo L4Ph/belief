@@ -4,9 +4,9 @@ version = "0.0.1"
 schema_version = 1
 authors = ["bel"]
 description = "bel: a guard-driven language whose conditions are beliefs"
-# A dev extension reads the grammar from this repository. Change the repository
-# and rev to your own remote once this is pushed.
-repository = "https://github.com/your-name/belief"
+# The extension's own repository. The grammar below stays local while this is a
+# dev extension: Zed clones it on install, and the repository is private.
+repository = "https://github.com/L4Ph/belief"
 
 [grammars.bel]
 repository = "file:///Users/r5/Documents/git/belief"
