@@ -90,9 +90,9 @@ export type MockValue =
 
 /** A line of an action island, or the `with confidence_floor` block around some. */
 export type TestItem =
-  | { kind: "Line"; text: string }
-  | { kind: "Floor"; value: number; items: TestItem[] }
-  | { kind: "Record"; path: string };
+  | { kind: "Line"; text: string; span: Span }
+  | { kind: "Floor"; value: number; items: TestItem[]; span: Span }
+  | { kind: "Record"; path: string; span: Span };
 
 export type TestDecl = {
   kind: "Test" | "TestSnapshot";

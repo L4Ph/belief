@@ -114,10 +114,7 @@ class TestFileEmitter {
     return `${[...header, "", ...bodies].join("\n")}\n`;
   }
 
-  private testStart = 0;
-
   private emitTest(decl: TestDecl): string {
-    this.testStart = decl.span.start;
     const record = findRecord(decl.items);
     const useCassette = decl.kind === "TestSnapshot" || record !== null;
     if (useCassette && record === null) {
@@ -186,18 +183,18 @@ class TestFileEmitter {
         lines.push(`${pad}}`);
         continue;
       }
-      lines.push(...this.lowerLine(item.text, pad));
+      lines.push(...this.lowerLine(item.text, pad, item.span.start));
     }
     return lines;
   }
 
-  private lowerLine(text: string, pad: string): string[] {
+  private lowerLine(text: string, pad: string, at: number): string[] {
     const issue = findNonErasable(text);
     if (issue !== null) {
       throw this.error(
         `${issue.what} has a runtime value, and bel tests run by stripping types; ${issue.fix}`,
         "non-erasable-syntax",
-        this.testStart,
+        at + issue.at,
       );
     }
 

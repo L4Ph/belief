@@ -479,23 +479,24 @@ class Parser {
       base ??= indent;
       if (!indent.startsWith(base)) break;
 
-      const text = this.source.slice(lineStart + base.length, this.lineEnd(lineStart));
+      const span = { start: lineStart + base.length, end: this.lineEnd(lineStart) };
+      const text = this.source.slice(span.start, span.end);
       this.i = this.lineEnd(lineStart);
       this.expectEndOfLine();
 
       const floor = /^with\s+confidence_floor\s+([0-9]+(?:\.[0-9]+)?)\s*$/.exec(text);
       if (floor !== null) {
-        items.push({ kind: "Floor", value: Number(floor[1]), items: this.testItems(indent) });
+        items.push({ kind: "Floor", value: Number(floor[1]), items: this.testItems(indent), span });
         continue;
       }
 
       const record = /^record\s+"([^"]*)"\s*$/.exec(text);
       if (record !== null) {
-        items.push({ kind: "Record", path: record[1] as string });
+        items.push({ kind: "Record", path: record[1] as string, span });
         continue;
       }
 
-      items.push({ kind: "Line", text });
+      items.push({ kind: "Line", text, span });
     }
 
     return items;
