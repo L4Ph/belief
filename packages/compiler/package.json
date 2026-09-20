@@ -4,7 +4,7 @@
   "description": "bel compiler: .bel source to TypeScript",
   "license": "MIT",
   "bin": {
-    "compiler": "./dist/bin.mjs"
+    "bel": "./dist/bin.mjs"
   },
   "files": [
     "dist"

@@ -8,7 +8,9 @@ export default defineConfig({
     dts: {
       generator: "tsgo",
     },
-    exports: true,
+    // `exports: true` also rewrites `bin` in package.json, and it named the CLI
+    // after the package instead of `bel`. Both fields are declared by hand.
+    exports: false,
   },
   lint: {
     options: {
