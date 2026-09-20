@@ -1,12 +1,17 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createJevRuntime } from "@bel/runtime";
 import type { BelRuntime, Evaluation, Question } from "@bel/runtime";
 
 export type CassetteOptions = {
-  /** Where the recording lives, relative to the test file. */
-  path: string;
+  /**
+   * Where the recording lives. A `URL` is resolved as the test file wrote it,
+   * which is what generated tests pass: a bare string would resolve against
+   * the process's working directory instead.
+   */
+  path: string | URL;
   /** Record instead of replay. Defaults to `BEL_RECORD=1`. */
   record?: boolean;
   /** The transport to record from. Defaults to the live TypeSafe service. */
@@ -35,19 +40,20 @@ type Cassette = {
  */
 export function createCassetteRuntime(options: CassetteOptions): BelRuntime {
   const record = options.record ?? process.env.BEL_RECORD === "1";
+  const path = typeof options.path === "string" ? options.path : fileURLToPath(options.path);
 
   return {
     async evaluate(questions: Question[], state: unknown): Promise<Evaluation[]> {
       const model = options.model ?? process.env.BEL_MODEL ?? "jev-latest";
       const key = cassetteKey(model, questions, state);
-      const cassette = read(options.path);
+      const cassette = read(path);
 
       const recorded = cassette.entries[key];
       if (recorded !== undefined && !record) return recorded;
 
       if (!record) {
         throw new Error(
-          `no recording for this request in ${options.path} (key ${key.slice(0, 12)}…).\n` +
+          `no recording for this request in ${path} (key ${key.slice(0, 12)}…).\n` +
             `Re-record with BEL_RECORD=1 if the question or the state changed on purpose.`,
         );
       }
@@ -57,7 +63,7 @@ export function createCassetteRuntime(options: CassetteOptions): BelRuntime {
       const resolved = resolvedModelOf(transport);
       cassette.model = resolved ?? model;
       cassette.entries[key] = evaluations;
-      write(options.path, cassette);
+      write(path, cassette);
       return evaluations;
     },
   };

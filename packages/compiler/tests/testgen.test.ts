@@ -91,7 +91,9 @@ test.snapshot "production behaviour"
   record "cassettes/support.v1.json"
   assert (await support(fakeTicket)) is _
 `);
-  expect(output).toContain(`createCassetteRuntime({ path: "cassettes/support.v1.json" })`);
+  expect(output).toContain(
+    `createCassetteRuntime({ path: new URL("cassettes/support.v1.json", import.meta.url) })`,
+  );
   expect(output).not.toContain("createMockRuntime");
 });
 

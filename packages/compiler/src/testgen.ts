@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import type { FlowDecl, Guard, MockEntry, MockValue, Program, TestDecl, TestItem } from "./ast.ts";
 import { BelError, positionAt } from "./ast.ts";
+import { findNonErasable } from "./erasable.ts";
 import { collectQuestions, questionKey } from "./questions.ts";
 import type { QuestionSpec } from "./questions.ts";
 import { quote, readsName, splitTopLevel } from "./text.ts";
@@ -108,7 +109,10 @@ class TestFileEmitter {
     return `${[...header, "", ...bodies].join("\n")}\n`;
   }
 
+  private testStart = 0;
+
   private emitTest(decl: TestDecl): string {
+    this.testStart = decl.span.start;
     const record = findRecord(decl.items);
     const useCassette = decl.kind === "TestSnapshot" || record !== null;
     if (useCassette && record === null) {
@@ -134,7 +138,11 @@ class TestFileEmitter {
 
     const body = this.emitItems(decl.items, "    ");
     const setup = useCassette
-      ? [`  configureBel(createCassetteRuntime({ path: ${quote(record?.path as string)} }));`]
+      ? [
+          `  configureBel(`,
+          `    createCassetteRuntime({ path: new URL(${quote(record?.path as string)}, import.meta.url) }),`,
+          `  );`,
+        ]
       : [
           "  configureBel(",
           "    createMockRuntime({",
@@ -179,6 +187,15 @@ class TestFileEmitter {
   }
 
   private lowerLine(text: string, pad: string): string[] {
+    const issue = findNonErasable(text);
+    if (issue !== null) {
+      throw this.error(
+        `${issue.what} has a runtime value, and bel tests run by stripping types; ${issue.fix}`,
+        "non-erasable-syntax",
+        this.testStart,
+      );
+    }
+
     const assertion = /^assert\s+(.+?)\s+is\s+(.+)$/.exec(text);
     if (assertion !== null)
       return this.lowerAssertion(assertion[1] as string, (assertion[2] as string).trim(), pad);

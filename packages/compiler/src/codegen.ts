@@ -10,6 +10,7 @@ import type {
   ScoreExpr,
 } from "./ast.ts";
 import { BelError, positionAt } from "./ast.ts";
+import { findNonErasable } from "./erasable.ts";
 import type { QuestionSpec } from "./questions.ts";
 import { collectQuestions, conjoinedText, questionKey } from "./questions.ts";
 import { quote, readsName, splitTopLevel } from "./text.ts";
@@ -72,6 +73,7 @@ class Emitter {
       switch (decl.kind) {
         case "ImportDecl":
         case "TypeDecl":
+          this.checkErasable(decl.raw, decl.span.start);
           this.out.push("");
           this.out.push(decl.raw);
           break;
@@ -93,6 +95,17 @@ class Emitter {
     }
 
     return `${this.out.join("\n")}\n`;
+  }
+
+  /** Nothing with a runtime value can survive a type-stripping runtime. */
+  private checkErasable(text: string, at: number): void {
+    const issue = findNonErasable(text);
+    if (issue === null) return;
+    throw new BelError(
+      `${issue.what} has a runtime value, and bel output is run by stripping types rather than compiling them; ${issue.fix}`,
+      "non-erasable-syntax",
+      this.where(at + issue.at),
+    );
   }
 
   private where(offset: number) {
@@ -240,6 +253,14 @@ class FlowEmitter {
   /** A block island runs as written; an expression island is returned. */
   private emitAction(action: Action, depth: number): string {
     if (action.kind === "GuardList") return this.emitGuards(action.guards, depth, false);
+    const issue = findNonErasable(action.text);
+    if (issue !== null) {
+      throw new BelError(
+        `${issue.what} has a runtime value, and bel output is run by stripping types rather than compiling them; ${issue.fix}`,
+        "non-erasable-syntax",
+        this.where(action.span.start + issue.at),
+      );
+    }
     if (action.text.startsWith("{")) return reindentBlock(action.text, depth);
     return `${"  ".repeat(depth)}return ${action.text};`;
   }

@@ -245,3 +245,36 @@ test("a score used as a bare belief is reported", () => {
 `),
   ).toThrow(/is a score; compare it with one of its levels/);
 });
+
+test("an enum in an action island is rejected", () => {
+  expect(() =>
+    compile(`flow f(t: Ticket): Action
+  "x" -> {
+    enum Kind { A }
+    return reply("a")
+  }
+  _ -> reply("b")
+`),
+  ).toThrow(/an enum has a runtime value/);
+});
+
+test("a parameter property in an action island is rejected", () => {
+  expect(() =>
+    compile(`flow f(t: Ticket): Action
+  "x" -> reply(String(new (class { constructor(public n: number) {} })(1)))
+  _ -> reply("b")
+`),
+  ).toThrow(/a parameter property has a runtime value/);
+});
+
+test("plain block islands are accepted", () => {
+  expect(() =>
+    compile(`flow f(t: Ticket): Action
+  "x" -> {
+    const kind: "a" | "b" = "a"
+    return reply(kind)
+  }
+  _ -> reply("b")
+`),
+  ).not.toThrow();
+});
