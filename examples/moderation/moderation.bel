@@ -1,0 +1,29 @@
+// Moderation where the fallback is the interesting path: the model may remove
+// something outright, and everything else a person sees.
+
+import { allow, remove, review, type Action, type Post } from "./actions.ts"
+
+export flow moderate(p: Post): Action
+  let intent = choice "what is this post doing?" in spam | abuse | question | praise
+
+  intent == abuse -> remove(p, "harassment")
+  intent == spam -> remove(p, "spam")
+
+  // A high threshold: letting a post through is a judgement to be sure of.
+  "the post is on topic and civil" @ 0.8 -> allow(p)
+
+  _ -> review(p)
+
+mock beliefs
+  "what is this post doing?" => "question"
+  "the post is on topic and civil" => 0.9
+
+test "a civil question goes through"
+  post = { body: "how do I export my data?" } as Post
+  assert (await moderate(post)) is Allow(_)
+
+test "an unsure model sends it to a person"
+  post = { body: "how do I export my data?" } as Post
+  // 0.9 is a confidence of 0.8, below the floor; the belief stops holding.
+  with confidence_floor 0.85
+    assert (await moderate(post)) is Review(_)

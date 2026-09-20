@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "ready": "vp check && vp run -r test && vp run -r build",
-    "prepare": "vp config"
+    "ready": "vp run -r build && vp check && vp run -r test",
+    "prepare": "vp config",
+    "examples": "node packages/compiler/src/bin.ts build examples/*/*.bel"
   },
   "devDependencies": {
     "vite": "catalog:",

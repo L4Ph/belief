@@ -1,0 +1,24 @@
+{
+  "name": "@bel-example/leads",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Scoring an inbound lead against a five-level rubric.",
+  "type": "module",
+  "scripts": {
+    "build": "bel build leads.bel",
+    "test": "vp test",
+    "check": "vp check",
+    "live": "node --env-file-if-exists=.env main.ts"
+  },
+  "dependencies": {
+    "@bel/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@bel/compiler": "workspace:*",
+    "@bel/testkit": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

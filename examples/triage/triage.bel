@@ -1,0 +1,35 @@
+// One flow, four destinations, and still a single call to the model: every
+// question below is collected before the first guard is evaluated.
+
+import { agent, human, selfServe, type Action, type Request } from "./actions.ts"
+
+export flow triage(r: Request): Action
+  let kind = choice "what is this request about?" in refund | integration | bug | question
+
+  // An agent asks for a tool, not for a person.
+  "the sender is an AI agent" -> agent(r)
+
+  kind == refund ->
+    guards {
+      // Moving money is a decision for a person, whatever the model thinks.
+      "the request asks for money to be moved" @ 0.9 -> human(r)
+      _ -> selfServe(r)
+    }
+
+  kind == integration -> selfServe(r)
+  _ -> human(r)
+
+mock beliefs
+  "the sender is an AI agent" => 0.1
+  "what is this request about?" => "refund"
+  "the request asks for money to be moved" => 0.95
+
+test "a refund request from a person reaches a human"
+  mail = { from: "ops@acme.example", subject: "double charge", body: "Please refund the second charge." } as Request
+  assert (await triage(mail)) is Human(_)
+
+test "the nested guard falls through when the model is unsure"
+  mail = { from: "ops@acme.example", subject: "double charge", body: "Please refund the second charge." } as Request
+  // 0.95 is a confidence of 0.9, below the floor, so the inner guard does not fire.
+  with confidence_floor 0.95
+    assert (await triage(mail)) is SelfServe(_)

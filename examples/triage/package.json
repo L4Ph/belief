@@ -1,0 +1,24 @@
+{
+  "name": "@bel-example/triage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "An inbound request routed to a human, an agent, or self-serve.",
+  "type": "module",
+  "scripts": {
+    "build": "bel build triage.bel",
+    "test": "vp test",
+    "check": "vp check",
+    "live": "node --env-file-if-exists=.env main.ts"
+  },
+  "dependencies": {
+    "@bel/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@bel/compiler": "workspace:*",
+    "@bel/testkit": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

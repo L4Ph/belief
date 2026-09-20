@@ -1,0 +1,24 @@
+{
+  "entries": {
+    "165452a42b5d54a1cbfc282de464238b38656c3340fe9abb305b4e4c0559425a": [
+      {
+        "confidence": 0.38,
+        "id": "0",
+        "probs": [0.2, 0.2, 0.46, 0.13, 0.01],
+        "raw": 1.56,
+        "text": "how well does this lead match the ideal customer?",
+        "type": "score",
+        "value": 2
+      },
+      {
+        "confidence": 0.2,
+        "id": "1",
+        "text": "the lead has asked about pricing",
+        "type": "noul",
+        "value": 0.6
+      }
+    ]
+  },
+  "model": "jev-1.13.0",
+  "version": 1
+}

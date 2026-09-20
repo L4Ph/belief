@@ -32,6 +32,8 @@ dist-ssr
 # AI agent worktrees
 .claude/worktrees/
 
-# bel generated output
+# bel generated output, except in the examples, where it is the documentation
 *.bel.ts
 *.bel.test.ts
+!examples/**/*.bel.ts
+!examples/**/*.bel.test.ts

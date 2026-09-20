@@ -1,0 +1,24 @@
+{
+  "name": "@bel-example/moderation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Content moderation where the uncertain path is the one that matters.",
+  "type": "module",
+  "scripts": {
+    "build": "bel build moderation.bel",
+    "test": "vp test",
+    "check": "vp check",
+    "live": "node --env-file-if-exists=.env main.ts"
+  },
+  "dependencies": {
+    "@bel/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@bel/compiler": "workspace:*",
+    "@bel/testkit": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

@@ -1,0 +1,31 @@
+// A support ticket is routed by how angry the customer is and how urgent the
+// request is. Both are collected before the first guard runs, so the branch
+// itself costs nothing.
+
+import { escalate, refund, reply, type Action, type Ticket } from "./actions.ts"
+
+export flow support(t: Ticket): Action
+  let urgency = score "how urgent is this request?" in low | medium | high | human
+
+  // Anything the model reads as urgent or beyond goes to a person.
+  urgency >= high -> escalate(t)
+
+  // Two independent questions, combined. 0.7 because a refund is expensive.
+  "the customer is angry" & "the customer asks for a refund" @ 0.7 -> refund(t)
+
+  _ -> reply("could you tell me more about the order?")
+
+mock beliefs
+  "how urgent is this request?" => 1
+  "the customer is angry" => 0.9
+  "the customer asks for a refund" => 0.9
+
+test "an angry refund request is refunded"
+  ticket = { message: "I want my money back" } as Ticket
+  assert (await support(ticket)) is Refund(_)
+
+test "when the model is unsure, the ticket stays with the agent"
+  ticket = { message: "I want my money back" } as Ticket
+  // Both beliefs sit at 0.9, which is a confidence of 0.8; the floor is above it.
+  with confidence_floor 0.85
+    assert (await support(ticket)) is Reply(_)

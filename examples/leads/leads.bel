@@ -1,0 +1,25 @@
+// A five-level rubric, and a conjunction. Compile with `--conjoin` to ask the
+// model for the conjunction as one question instead of multiplying two; the
+// mock table would then need an entry for the combined text.
+
+import { disqualify, nurture, pursue, type Action, type Lead } from "./actions.ts"
+
+export flow rate(l: Lead): Action
+  let fit = score "how well does this lead match the ideal customer?" in none | poor | fair | good | ideal
+
+  fit >= good & "the lead has asked about pricing" -> pursue(l)
+  fit >= fair -> nurture(l)
+  _ -> disqualify(l)
+
+mock beliefs
+  "how well does this lead match the ideal customer?" => 3
+  "the lead has asked about pricing" => 0.9
+
+test "a good fit that asked about pricing is pursued"
+  lead = { company: "Acme", employees: 240, source: "pricing page" } as Lead
+  assert (await rate(lead)) is Pursue(_)
+
+test.snapshot "a real answer, recorded once"
+  record "cassettes/leads.v1.json"
+  lead = { company: "Acme", employees: 240, source: "pricing page" } as Lead
+  assert (await rate(lead)) is _

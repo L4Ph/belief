@@ -194,6 +194,106 @@ importers:
         specifier: 'catalog:'
         version: 0.3.2(@types/node@24.13.6)(typescript@7.0.2)
 
+  examples/leads:
+    dependencies:
+      '@bel/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+    devDependencies:
+      '@bel/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@bel/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.6
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: '@voidzero-dev/vite-plus-core@0.3.2(@types/node@24.13.6)(typescript@7.0.2)'
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.3.2(@types/node@24.13.6)(typescript@7.0.2)
+
+  examples/moderation:
+    dependencies:
+      '@bel/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+    devDependencies:
+      '@bel/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@bel/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.6
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: '@voidzero-dev/vite-plus-core@0.3.2(@types/node@24.13.6)(typescript@7.0.2)'
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.3.2(@types/node@24.13.6)(typescript@7.0.2)
+
+  examples/support:
+    dependencies:
+      '@bel/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+    devDependencies:
+      '@bel/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@bel/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.6
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: '@voidzero-dev/vite-plus-core@0.3.2(@types/node@24.13.6)(typescript@7.0.2)'
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.3.2(@types/node@24.13.6)(typescript@7.0.2)
+
+  examples/triage:
+    dependencies:
+      '@bel/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+    devDependencies:
+      '@bel/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@bel/testkit':
+        specifier: workspace:*
+        version: link:../../packages/testkit
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.6
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: '@voidzero-dev/vite-plus-core@0.3.2(@types/node@24.13.6)(typescript@7.0.2)'
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.3.2(@types/node@24.13.6)(typescript@7.0.2)
+
   packages/compiler:
     devDependencies:
       '@types/node':

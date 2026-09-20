@@ -34,6 +34,26 @@ types); it is never compiled to JavaScript. A belief is a probability a model
 answers, so a condition carries a threshold on its surface, and the questions a
 flow will ask are known before it runs.
 
+## Examples
+
+| Example                                      | What it shows                                                                              |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [`examples/support`](examples/support)       | beliefs combined with `&`, a `score` compared against a level, a threshold, a fallback     |
+| [`examples/moderation`](examples/moderation) | a `choice` comparison, a high threshold, and a `confidence_floor` that changes the outcome |
+| [`examples/triage`](examples/triage)         | nested guards, four destinations, still one call to the model                              |
+| [`examples/leads`](examples/leads)           | a five-level rubric, and a recorded model answer replayed as a regression test             |
+
+Each one commits the generated TypeScript next to its `.bel` source, so the
+compiler's output is readable without running anything. A test in the compiler
+package fails if the two drift apart.
+
+```bash
+cd examples/support
+bel build support.bel   # regenerate support.bel.ts
+bel test support.bel    # run the tests (mocked, no network)
+TYPESAFE_API_KEY=... node main.ts   # or ask the real model
+```
+
 ## Commands
 
 ```bash
