@@ -20,7 +20,7 @@ import type {
   TestDecl,
   TypeDecl,
 } from "./ast.ts";
-import { BelParseError, positionAt } from "./ast.ts";
+import { BelError, BelParseError, positionAt } from "./ast.ts";
 import { matchBracket, scanRaw } from "./scanner.ts";
 
 const IDENT_PART = /[A-Za-z0-9_$]/;
@@ -40,8 +40,11 @@ export function parseBel(source: string): Program {
 
 class Parser {
   private i = 0;
+  private readonly source: string;
 
-  constructor(private readonly source: string) {}
+  constructor(source: string) {
+    this.source = source;
+  }
 
   parseProgram(): Program {
     const body: Declaration[] = [];
@@ -196,7 +199,7 @@ class Parser {
         // A guard list ends at column 0 or at the `}` that closes `guards {`.
         // Anything else indented differently is a mistake worth reporting.
         if (here !== "" && this.source[start + here.length] !== "}") {
-          this.fail("mixed indentation in a guard list", start);
+          throw this.error("mixed indentation in a guard list", "indent-mixed", start);
         }
         break;
       }
@@ -230,7 +233,9 @@ class Parser {
     this.i += 1;
     this.skipSpaces();
     const value = this.number();
-    if (value < 0 || value > 1) this.fail("a threshold must be between 0 and 1", at);
+    if (value < 0 || value > 1) {
+      throw this.error("a threshold must be between 0 and 1", "bad-threshold", at);
+    }
     return value;
   }
 
@@ -517,6 +522,11 @@ class Parser {
 
   private fail(message: string, at = this.i): never {
     throw new BelParseError(message, positionAt(this.source, at));
+  }
+
+  /** A diagnostic that is not a syntax error, but that the parser can already see. */
+  private error(message: string, code: string, at = this.i): BelError {
+    return new BelError(message, code, positionAt(this.source, at));
   }
 
   private skipSpaces(): void {

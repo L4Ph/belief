@@ -100,12 +100,31 @@ export type TestDecl = {
   span: Span;
 };
 
-export class BelParseError extends Error {
-  constructor(
-    message: string,
-    readonly position: Position,
-  ) {
+export class BelError extends Error {
+  readonly code: string;
+  readonly position: Position | undefined;
+
+  constructor(message: string, code: string, position?: Position) {
     super(message);
+    this.name = "BelError";
+    this.code = code;
+    this.position = position;
+  }
+
+  /** `path:line:column: code: message`, dropping the parts that are unknown. */
+  format(path?: string): string {
+    const where = [path, this.position?.line, this.position?.column]
+      .filter((part) => part !== undefined)
+      .join(":");
+    return where === ""
+      ? `${this.code}: ${this.message}`
+      : `${where}: ${this.code}: ${this.message}`;
+  }
+}
+
+export class BelParseError extends BelError {
+  constructor(message: string, position: Position) {
+    super(message, "parse-error", position);
     this.name = "BelParseError";
   }
 }

@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { BelParseError } from "../src/ast.ts";
+import { BelError } from "../src/ast.ts";
 import type { FlowDecl } from "../src/ast.ts";
 import { parseBel } from "../src/parser.ts";
 
@@ -245,7 +245,7 @@ route _ (c: Context) -> c.json({ error: "unrouted" }, 404)
 });
 
 test("a missing return type is rejected", () => {
-  expect(() => parseBel(`flow f(t: Ticket)\n  _ -> reply("ok")\n`)).toThrow(BelParseError);
+  expect(() => parseBel(`flow f(t: Ticket)\n  _ -> reply("ok")\n`)).toThrow(BelError);
 });
 
 test("a threshold outside 0..1 is rejected", () => {
@@ -265,14 +265,15 @@ test("an unterminated action block is rejected", () => {
   );
 });
 
-test("parse errors carry a line and column", () => {
+test("diagnostics carry a line and column", () => {
   try {
-    parseBel(`flow f(t: Ticket): Action\n  "x" @ 1.5 -> reply("ok")\n`);
-    throw new Error("expected a parse error");
+    parseBel(`flow f(t: Ticket): Action\n  "x" ->\n`);
+    throw new Error("expected a diagnostic");
   } catch (error) {
-    if (!(error instanceof BelParseError)) throw error;
-    expect(error.position.line).toBe(2);
-    expect(error.position.column).toBeGreaterThan(1);
+    if (!(error instanceof BelError)) throw error;
+    expect(error.code).toBe("parse-error");
+    expect(error.position?.line).toBe(2);
+    expect(error.position?.column).toBeGreaterThan(1);
   }
 });
 
@@ -300,4 +301,20 @@ test("a number must start with a digit", () => {
   expect(() => parseBel(`flow f(t: Ticket): Action\n  "x" @ .5 -> reply("ok")\n`)).toThrow(
     /expected a number/,
   );
+});
+
+test("threshold and indentation diagnostics carry their own codes", () => {
+  const cases: [string, string][] = [
+    [`flow f(t: Ticket): Action\n  "x" @ 1.5 -> reply("ok")\n`, "bad-threshold"],
+    [`flow f(t: Ticket): Action\n  "a" -> reply("a")\n\t"b" -> reply("b")\n`, "indent-mixed"],
+  ];
+  for (const [source, code] of cases) {
+    try {
+      parseBel(source);
+      throw new Error(`expected a ${code} error`);
+    } catch (error) {
+      if (!(error instanceof BelError)) throw error;
+      expect(error.code).toBe(code);
+    }
+  }
 });
