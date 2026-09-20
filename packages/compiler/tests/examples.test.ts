@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vite-plus/test";
@@ -36,7 +36,11 @@ for (const { name, file } of examples()) {
 
   test(`${name}: the committed tests are what the compiler produces`, () => {
     const generated = generateTests(parseBel(source), { source, fileName: file });
-    expect(generated).not.toBeNull();
+    // A module with nothing to test commits no test file, and never a stale one.
+    if (generated === null) {
+      expect(existsSync(`${file}.test.ts`)).toBe(false);
+      return;
+    }
     expect(generated).toBe(readFileSync(`${file}.test.ts`, "utf8"));
   });
 }

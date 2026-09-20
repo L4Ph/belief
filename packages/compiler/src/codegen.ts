@@ -7,6 +7,7 @@ import type {
   LabelOperand,
   LetBinding,
   Program,
+  RouteDecl,
   ScoreExpr,
 } from "./ast.ts";
 import { BelError, positionAt } from "./ast.ts";
@@ -67,13 +68,21 @@ class Emitter {
 
   program(program: Program): string {
     this.out.push("// @generated from bel source. Do not edit.");
-    this.out.push(`import { __bel } from ${quote(this.runtime)};`);
+    const routes = program.body.filter((decl): decl is RouteDecl => decl.kind === "RouteDecl");
+    // A module that only routes does not consult `__bel`; importing it anyway
+    // would be an unused import, which is a type error.
+    if (program.body.some((decl) => decl.kind === "FlowDecl")) {
+      this.out.push(`import { __bel } from ${quote(this.runtime)};`);
+    }
+    if (routes.length > 0) {
+      this.out.push(`import type { BelRoute } from "@bel/hono";`);
+    }
 
     for (const decl of program.body) {
       switch (decl.kind) {
         case "ImportDecl":
         case "TypeDecl":
-          this.checkErasable(decl.raw, decl.span.start);
+          erasableOrThrow(decl.raw, decl.span.start, this.source);
           this.out.push("");
           this.out.push(decl.raw);
           break;
@@ -82,11 +91,8 @@ class Emitter {
           this.out.push(new FlowEmitter(decl, this.source, this.andStrategy).emit());
           break;
         case "RouteDecl":
-          throw new BelError(
-            "`route` is not implemented in bel v0 (see RFC 0001, Future work)",
-            "route-not-implemented",
-            this.where(decl.span.start),
-          );
+          // All of them become one app; `RouteEmitter` emits the whole table.
+          break;
         case "MockBeliefs":
         case "Test":
         case "TestSnapshot":
@@ -94,18 +100,92 @@ class Emitter {
       }
     }
 
+    if (routes.length > 0) {
+      this.out.push("");
+      this.out.push(new RouteEmitter(routes, this.source).emit());
+    }
+
     return `${this.out.join("\n")}\n`;
   }
+}
 
-  /** Nothing with a runtime value can survive a type-stripping runtime. */
-  private checkErasable(text: string, at: number): void {
-    const issue = findNonErasable(text);
-    if (issue === null) return;
-    throw new BelError(
-      `${issue.what} has a runtime value, and bel output is run by stripping types rather than compiling them; ${issue.fix}`,
-      "non-erasable-syntax",
-      this.where(at + issue.at),
-    );
+/**
+ * Every `route` in a module becomes one `BelRoute` table. The compiler says
+ * what the routes are and stops there: `@bel/hono` builds the app and decides
+ * which route a request takes, so Hono is not the compiler's business.
+ */
+class RouteEmitter {
+  private readonly routes: RouteDecl[];
+  private readonly source: string | undefined;
+
+  constructor(routes: RouteDecl[], source: string | undefined) {
+    this.routes = routes;
+    this.source = source;
+  }
+
+  emit(): string {
+    this.check();
+    const lines = ["export const routes: BelRoute[] = ["];
+    for (const route of this.routes) lines.push(`  ${this.entry(route)},`);
+    lines.push("];");
+    return lines.join("\n");
+  }
+
+  private check(): void {
+    const described = new Set<string>();
+    let fallback = false;
+    for (const route of this.routes) {
+      const target = route.target;
+      if (target.kind === "CatchAll") {
+        if (fallback) {
+          throw new BelError(
+            "a second `route _` can never fire: the first one is the fallback",
+            "unreachable-guard",
+            this.where(route.span.start),
+          );
+        }
+        fallback = true;
+        continue;
+      }
+      if (target.kind === "Path") continue;
+      const text = target.text ?? "";
+      if (described.has(text)) {
+        throw new BelError(
+          `\`${text}\` is described twice; the first route that matches wins`,
+          "unreachable-guard",
+          this.where(route.span.start),
+        );
+      }
+      described.add(text);
+    }
+  }
+
+  private entry(route: RouteDecl): string {
+    const handler = this.handler(route);
+    const target = route.target;
+    if (target.kind === "CatchAll") return `{ fallback: ${handler} }`;
+    if (target.kind === "Path") {
+      return `{ path: ${quote(target.text ?? "")}, handler: ${handler} }`;
+    }
+    const threshold = route.threshold === null ? "" : `threshold: ${route.threshold}, `;
+    return `{ description: ${quote(target.text ?? "")}, ${threshold}handler: ${handler} }`;
+  }
+
+  /** The island is the handler body, so a block runs as written and an expression is returned. */
+  private handler(route: RouteDecl): string {
+    const action = route.action;
+    if (action.kind === "GuardList") {
+      throw new BelError(
+        "a route handler is an action island, not a guard list",
+        "route-not-implemented",
+        this.where(action.span.start),
+      );
+    }
+    erasableOrThrow(action.text, action.span.start, this.source);
+    const body = action.text.startsWith("{")
+      ? reindentBlock(action.text, 1).trimStart()
+      : action.text;
+    return `async ${route.params} => ${body}`;
   }
 
   private where(offset: number) {
@@ -253,14 +333,7 @@ class FlowEmitter {
   /** A block island runs as written; an expression island is returned. */
   private emitAction(action: Action, depth: number): string {
     if (action.kind === "GuardList") return this.emitGuards(action.guards, depth, false);
-    const issue = findNonErasable(action.text);
-    if (issue !== null) {
-      throw new BelError(
-        `${issue.what} has a runtime value, and bel output is run by stripping types rather than compiling them; ${issue.fix}`,
-        "non-erasable-syntax",
-        this.where(action.span.start + issue.at),
-      );
-    }
+    erasableOrThrow(action.text, action.span.start, this.source);
     if (action.text.startsWith("{")) return reindentBlock(action.text, depth);
     return `${"  ".repeat(depth)}return ${action.text};`;
   }
@@ -435,6 +508,17 @@ class FlowEmitter {
   private where(offset: number) {
     return this.source === undefined ? undefined : positionAt(this.source, offset);
   }
+}
+
+/** Nothing with a runtime value can survive a type-stripping runtime. */
+function erasableOrThrow(text: string, start: number, source: string | undefined): void {
+  const issue = findNonErasable(text);
+  if (issue === null) return;
+  throw new BelError(
+    `${issue.what} has a runtime value, and bel output is run by stripping types rather than compiling them; ${issue.fix}`,
+    "non-erasable-syntax",
+    source === undefined ? undefined : positionAt(source, start + issue.at),
+  );
 }
 
 function questionSource(question: Question): string {

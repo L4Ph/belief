@@ -195,10 +195,56 @@ test("a guard after the catch-all is reported", () => {
   ).toThrow(/after the catch-all/);
 });
 
-test("route is rejected with a clear error", () => {
-  expect(() => compile(`route "refunds" (c: Context) -> refund(c)\n`)).toThrow(
-    /`route` is not implemented in bel v0/,
+test("routes become one BelRoute table for @bel/hono", () => {
+  const source = `route "a visitor asking for an example" @ 0.7 (c: Context) -> c.html(page(c))
+route "/health" (c: Context) -> c.text("ok")
+route _ (c: Context) -> c.html(notFound(c), 404)
+`;
+  const output = compile(source);
+  expect(output).toContain(`import type { BelRoute } from "@bel/hono";`);
+  // The compiler describes the routes; building the app is @bel/hono's job.
+  expect(output).not.toContain("new Hono");
+  expect(output).not.toContain("@bel/runtime");
+  expect(output).toContain("export const routes: BelRoute[] = [");
+  expect(output).toContain(
+    `  { description: "a visitor asking for an example", threshold: 0.7, handler: async (c: Context) => c.html(page(c)) },`,
   );
+  expect(output).toContain(`  { path: "/health", handler: async (c: Context) => c.text("ok") },`);
+  expect(output).toContain(`  { fallback: async (c: Context) => c.html(notFound(c), 404) },`);
+});
+
+test("a module with routes and flows imports both runtimes", () => {
+  const output = compile(`route "/health" (c: Context) -> c.text("ok")
+
+flow f(t: Ticket): Action
+  _ -> reply("ok")
+`);
+  expect(output).toContain(`import { __bel } from "@bel/runtime";`);
+  expect(output).toContain(`import type { BelRoute } from "@bel/hono";`);
+});
+
+test("a block route handler keeps its shape", () => {
+  const output = compile(`route "/health" (c: Context) -> {
+  const ok = true
+  return c.json({ ok })
+}
+`);
+  expect(output).toContain(
+    `  { path: "/health", handler: async (c: Context) => {\n    const ok = true\n    return c.json({ ok })\n  } },`,
+  );
+});
+
+test("a second catch-all or a repeated description is an error", () => {
+  expect(() =>
+    compile(`route _ (c: Context) -> c.text("a")
+route _ (c: Context) -> c.text("b")
+`),
+  ).toThrow(/second `route _`/);
+  expect(() =>
+    compile(`route "same" (c: Context) -> c.text("a")
+route "same" (c: Context) -> c.text("b")
+`),
+  ).toThrow(/described twice/);
 });
 
 test("errors carry the diagnostic code and a position", () => {
