@@ -1,0 +1,6 @@
+name = "bel"
+grammar = "bel"
+path_suffixes = ["bel"]
+line_comments = ["// "]
+tab_size = 2
+hard_tabs = false

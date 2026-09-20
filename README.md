@@ -68,6 +68,21 @@ nothing: it uses the environment it is handed.
 | `BEL_API_URL`      | the endpoint, the TypeSafe service by default                  |
 | `BEL_RECORD`       | set to `1` to record a `test.snapshot` instead of replaying it |
 
+## Editor support
+
+`editors/tree-sitter-bel` is a tree-sitter grammar (highlighting, and TypeScript
+injected into every action island), and `editors/zed` is a Zed extension that
+pairs it with `bel-lsp` for diagnostics, hover and level completion.
+
+```bash
+vp run -r build
+ln -sf "$PWD/packages/lsp/dist/bin.mjs" /usr/local/bin/bel-lsp
+```
+
+Then in Zed: `zed: extensions` → **Install Dev Extension** → `editors/zed`. See
+[`editors/zed/README.md`](editors/zed/README.md) for the grammar revision to
+pin.
+
 ## Commands
 
 ```bash

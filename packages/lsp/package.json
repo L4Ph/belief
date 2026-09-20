@@ -1,0 +1,33 @@
+{
+  "name": "@bel/lsp",
+  "version": "0.0.0",
+  "description": "Language server for bel: diagnostics, hover and completion",
+  "license": "MIT",
+  "bin": {
+    "bel-lsp": "./dist/bin.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "test": "vp test",
+    "check": "vp check",
+    "prepublishOnly": "vp run build"
+  },
+  "dependencies": {
+    "@bel/compiler": "workspace:*"
+  },
+  "devDependencies": {
+    "@bel/compiler": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

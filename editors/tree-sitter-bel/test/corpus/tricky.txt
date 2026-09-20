@@ -1,0 +1,70 @@
+==================
+a block island is brace balanced
+==================
+
+flow f(t: Ticket): Action
+  "x" -> {
+    // }} and { in a comment
+    return c.json({ error: "}" }, 404)
+  }
+  _ -> reply("ok")
+
+---
+
+(source_file
+  (flow_declaration
+    (identifier)
+    (parameter_list)
+    (raw_line)
+    (guard
+      (belief_literal (string))
+      (block_island))
+    (guard
+      (line_island))))
+
+==================
+guards block, not an island
+==================
+
+flow f(t: Ticket): Action
+  "x" ->
+    guards {
+      a >= b -> reply("a")
+      _ -> reply("b")
+    }
+  _ -> reply("c")
+
+---
+
+(source_file
+  (flow_declaration
+    (identifier)
+    (parameter_list)
+    (raw_line)
+    (guard
+      (belief_literal (string))
+      (guards_block
+        (guards_keyword)
+        (guard
+          (comparison (identifier) (comparison_operator) (label (identifier)))
+          (line_island))
+        (guard (line_island))))
+    (guard (line_island))))
+
+==================
+an island that starts with the word guards is not a guards block
+==================
+
+flow f(t: Ticket): Action
+  "x" -> guardsOf(t)
+  _ -> reply("ok")
+
+---
+
+(source_file
+  (flow_declaration
+    (identifier)
+    (parameter_list)
+    (raw_line)
+    (guard (belief_literal (string)) (line_island))
+    (guard (line_island))))

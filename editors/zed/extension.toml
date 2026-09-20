@@ -1,0 +1,18 @@
+id = "bel"
+name = "bel"
+version = "0.0.1"
+schema_version = 1
+authors = ["bel"]
+description = "bel: a guard-driven language whose conditions are beliefs"
+# A dev extension reads the grammar from this repository. Change the repository
+# and rev to your own remote once this is pushed.
+repository = "https://github.com/your-name/belief"
+
+[grammars.bel]
+repository = "file:///Users/r5/Documents/git/belief"
+rev = "PLACEHOLDER_REV"
+path = "editors/tree-sitter-bel"
+
+[language_servers.bel]
+name = "bel"
+languages = ["bel"]

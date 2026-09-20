@@ -7,13 +7,18 @@ export default defineConfig({
   // The examples commit what the compiler produced, so the two stay comparable
   // byte for byte; formatting an artifact would only make the diff noisy.
   fmt: {
-    ignorePatterns: ["**/*.bel.ts", "**/*.bel.test.ts"],
+    ignorePatterns: [
+      "**/*.bel.ts",
+      "**/*.bel.test.ts",
+      // A tree-sitter grammar: generated C, and a grammar.js the toolchain owns.
+      "editors/**",
+    ],
   },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: { typeAware: true, typeCheck: true },
-    ignorePatterns: ["**/*.bel.ts", "**/*.bel.test.ts"],
+    ignorePatterns: ["**/*.bel.ts", "**/*.bel.test.ts", "editors/**"],
   },
   run: {
     cache: true,

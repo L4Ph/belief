@@ -1,0 +1,18 @@
+{
+  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/config.schema.json",
+  "grammars": [
+    {
+      "name": "bel",
+      "camelcase": "Bel",
+      "title": "bel",
+      "scope": "source.bel",
+      "file-types": ["bel"],
+      "injection-regex": "^bel$"
+    }
+  ],
+  "metadata": {
+    "version": "0.0.1",
+    "license": "MIT",
+    "description": "bel grammar for tree-sitter"
+  }
+}

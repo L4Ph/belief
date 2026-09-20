@@ -312,6 +312,25 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@24.13.6)(@vitest/browser-preview@4.1.11)(@voidzero-dev/vite-plus-core@0.3.2(@types/node@24.13.6)(typescript@7.0.2))
 
+  packages/lsp:
+    dependencies:
+      '@bel/compiler':
+        specifier: workspace:*
+        version: link:../compiler
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.6
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: 'catalog:'
+        version: '@voidzero-dev/vite-plus-core@0.3.2(@types/node@24.13.6)(typescript@7.0.2)'
+      vite-plus:
+        specifier: 'catalog:'
+        version: 0.3.2(@types/node@24.13.6)(typescript@7.0.2)
+
   packages/runtime:
     devDependencies:
       '@types/node':
