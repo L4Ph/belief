@@ -96,9 +96,14 @@ class TestFileEmitter {
       );
     }
 
+    const body = this.tests.map((decl) => flatten(decl.items)).join("\n");
     const passthrough = this.program.body
-      .filter((decl) => decl.kind === "ImportDecl" || decl.kind === "TypeDecl")
-      .map((decl) => (decl.kind === "ImportDecl" || decl.kind === "TypeDecl" ? decl.raw : ""));
+      .map((decl) => {
+        if (decl.kind === "TypeDecl") return decl.raw;
+        if (decl.kind === "ImportDecl") return filterImport(decl.raw, body);
+        return "";
+      })
+      .filter((raw) => raw !== "");
     if (passthrough.length > 0) header.push("", ...passthrough);
 
     if (flowNames.size > 0) {
@@ -329,6 +334,21 @@ function islandsOf(flow: FlowDecl): string {
   };
   walk(flow.guards);
   return parts.join("\n");
+}
+
+/** `import { a, type B } from "x"` with only the names the test body mentions. */
+function filterImport(raw: string, body: string): string {
+  const named = /^import\s*\{([^}]*)\}\s*from\s*(["'][^"']*["'])\s*$/.exec(raw.trim());
+  // A default import or a side-effect import is not ours to trim.
+  if (named === null) return raw;
+  const kept = (named[1] as string)
+    .split(",")
+    .map((specifier) => specifier.trim())
+    .filter((specifier) => {
+      const name = /^(?:type\s+)?([A-Za-z_$][A-Za-z0-9_$]*)$/.exec(specifier);
+      return name !== null && readsName(body, name[1] as string);
+    });
+  return kept.length === 0 ? "" : `import { ${kept.join(", ")} } from ${named[2]};`;
 }
 
 function mockValueSource(value: MockValue): string {

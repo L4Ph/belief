@@ -175,3 +175,34 @@ test "angry"
     expect(error.code).toBe("test-without-answers");
   }
 });
+
+test("an import the test body never mentions is dropped", () => {
+  const output = generate(`${FLOW}
+mock beliefs
+  "how urgent is this?" => 1
+  "the user is angry" => 0.9
+
+test "a ticket"
+  ticket = { message: "hello" } as Ticket
+  assert (await support(ticket)) is _
+`);
+  // The assertion names `Refund` as a string, so no action function is needed.
+  expect(output).toContain(`import { type Ticket } from "./actions.ts";`);
+  expect(output).not.toContain("escalate");
+});
+
+test("an import declaration it cannot read is passed through untouched", () => {
+  const output = generate(`import "./setup.ts"
+
+flow f(t: Ticket): Action
+  "x" -> reply("a")
+  _ -> reply("b")
+
+mock beliefs
+  "x" => 0.1
+
+test "a ticket"
+  assert (await f(t)) is _
+`);
+  expect(output).toContain(`import "./setup.ts"`);
+});
