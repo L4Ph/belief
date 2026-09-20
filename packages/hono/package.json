@@ -1,8 +1,7 @@
 {
-  "name": "hono-jev-router",
-  "version": "0.2.0",
-  "private": true,
-  "description": "Route HTTP requests by meaning. A semantic router for Hono powered by Jev. Vendored from yusukebe/hono-jev-router",
+  "name": "@bel/hono",
+  "version": "0.0.0",
+  "description": "bel route target: a route table on Hono, decided by the bel runtime",
   "license": "MIT",
   "files": [
     "dist"
@@ -17,10 +16,13 @@
     "dev": "vp pack --watch",
     "test": "vp test",
     "check": "vp check",
-    "live": "node --env-file-if-exists=../../.env example.ts",
     "prepublishOnly": "vp run build"
   },
+  "dependencies": {
+    "@bel/runtime": "workspace:*"
+  },
   "devDependencies": {
+    "@bel/testkit": "workspace:*",
     "@types/node": "catalog:",
     "hono": "^4.13.8",
     "typescript": "catalog:",
