@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "vite-plus/test";
 import { findNonErasable } from "../src/erasable.ts";
 
@@ -55,4 +57,15 @@ test("the issue carries an offset", () => {
 test("a constructor with a nested call is still checked", () => {
   const issue = findNonErasable("class A {\n  constructor(readonly x = f(1, 2)) {}\n}");
   expect(issue).toMatchObject({ what: "a parameter property" });
+});
+
+/**
+ * The compiler's own source has to stay erasable: running it from source with
+ * `node src/index.ts` is how the package is used during development, and Node
+ * refuses parameter properties, enums and namespaces. A parameter property in
+ * this package slipped through twice.
+ */
+test("every compiler source file loads under node's type stripping", () => {
+  const entry = fileURLToPath(new URL("../src/index.ts", import.meta.url));
+  expect(() => execFileSync(process.execPath, [entry], { stdio: "pipe" })).not.toThrow();
 });

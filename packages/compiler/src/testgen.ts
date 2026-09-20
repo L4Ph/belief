@@ -43,13 +43,13 @@ class TestFileEmitter {
   private usesCassette = false;
 
   private readonly options: TestGenOptions;
+  private readonly program: Program;
+  private readonly tests: TestDecl[];
 
-  constructor(
-    private readonly program: Program,
-    private readonly tests: TestDecl[],
-    options: TestGenOptions,
-  ) {
+  constructor(program: Program, tests: TestDecl[], options: TestGenOptions) {
     this.options = options;
+    this.program = program;
+    this.tests = tests;
     for (const decl of program.body) {
       if (decl.kind === "FlowDecl") this.flows.set(decl.name, decl);
     }
