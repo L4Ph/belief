@@ -21,6 +21,10 @@ export default defineConfig({
     ignorePatterns: ["**/*.bel.ts", "**/*.bel.test.ts", "editors/**"],
   },
   run: {
-    cache: true,
+    // A package script is opaque to the task runner, so caching one replays a
+    // run that did not happen: `demo` and `live` call a paid API, and `test`
+    // would report a suite it never ran. Tasks, which vp can hash properly,
+    // keep the default.
+    cache: { scripts: false, tasks: true },
   },
 });
