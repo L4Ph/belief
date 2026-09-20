@@ -8,5 +8,9 @@ test("noulConfidence is 0 at p=0.5 and 1 at the extremes", () => {
 });
 
 test("noulConfidence on the measured probe value", () => {
-  expect(noulConfidence(0.86)).toBeCloseTo(0.72);
+  expect(noulConfidence(0.86)).toBe(0.72);
+});
+
+test("noulConfidence does not leak floating point noise", () => {
+  expect(noulConfidence(0.58)).toBe(0.16);
 });

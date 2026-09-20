@@ -49,8 +49,10 @@ export type Trace = {
  * Confidence of a `noul` evaluation.
  *
  * TypeSafe Jev answers a `noul` with a probability only, so bel defines
- * confidence as the normalised distance from 0.5.
+ * confidence as the normalised distance from 0.5. It is rounded to six
+ * decimals: the exact double of `0.58` is `0.15999999999999992`, which is
+ * noise in a trace and in a recorded cassette.
  */
 export function noulConfidence(p: number): number {
-  return Math.abs(p - 0.5) * 2;
+  return Math.round(Math.abs(p - 0.5) * 2 * 1e6) / 1e6;
 }
