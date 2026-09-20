@@ -1,31 +1,51 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { BelError } from "./ast.ts";
 import { compile } from "./compile.ts";
+import { parseBel } from "./parser.ts";
+import { generateTests } from "./testgen.ts";
 
 const USAGE = `bel — compile .bel source to TypeScript
 
 Usage:
   bel build [options] <file.bel>...
+  bel test [--conjoin] <file.bel>...
+
+Commands:
+  build   compile to <name>.bel.ts; test and mock declarations are stripped
+  test    compile the tests to <name>.bel.test.ts and run them with vitest
 
 Options:
   --out-dir <dir>   write generated files into <dir> instead of next to the source
   --conjoin         evaluate a & b as one conjoined question instead of a * b
   -h, --help        show this message
-
-The generated file is <name>.bel.ts. Test and mock declarations are stripped.
 `;
 
 export type CliIo = {
   stdout: (text: string) => void;
   stderr: (text: string) => void;
+  /** Runs the generated test files and returns an exit code. */
+  runVitest?: (files: string[]) => number;
 };
 
 const defaultIo: CliIo = {
   stdout: (text) => process.stdout.write(text),
   stderr: (text) => process.stderr.write(text),
+  runVitest: runVitest,
 };
+
+function runVitest(files: string[]): number {
+  const bin = fileURLToPath(new URL("../node_modules/.bin/vitest", import.meta.url));
+  const result = spawnSync(bin, ["run", ...files], { stdio: "inherit" });
+  if (result.error !== undefined) {
+    process.stderr.write(`bel: could not run vitest (${result.error.message})\n`);
+    return 1;
+  }
+  return result.status ?? 1;
+}
 
 /** Run the command line. Returns the process exit code. */
 export function main(argv: string[], io: CliIo = defaultIo): number {
@@ -40,7 +60,7 @@ export function main(argv: string[], io: CliIo = defaultIo): number {
   }
 
   const [command, ...rest] = args;
-  if (command !== "build") {
+  if (command !== "build" && command !== "test") {
     io.stderr(`bel: unknown command \`${command}\`\n\n${USAGE}`);
     return 1;
   }
@@ -78,19 +98,37 @@ export function main(argv: string[], io: CliIo = defaultIo): number {
   }
 
   let failed = false;
+  const generated: string[] = [];
+
   for (const file of files) {
     try {
       const source = readFileSync(file, "utf8");
-      const code = compile(source, conjoin ? { andStrategy: "conjoin" } : {});
-      const target = outDir === null ? `${file}.ts` : join(outDir, `${basename(file)}.ts`);
+      const strategy = conjoin ? { andStrategy: "conjoin" as const } : {};
+      const code =
+        command === "build"
+          ? compile(source, strategy)
+          : generateTests(parseBel(source), { source, fileName: file, ...strategy });
+      if (code === null) {
+        io.stderr(`bel: ${file} has no tests\n`);
+        continue;
+      }
+      const suffix = command === "test" ? ".test.ts" : ".ts";
+      const target =
+        outDir === null ? `${file}${suffix}` : join(outDir, `${basename(file)}${suffix}`);
       mkdirSync(dirname(target), { recursive: true });
       writeFileSync(target, code);
       io.stdout(`${file} -> ${target}\n`);
+      generated.push(target);
     } catch (error) {
       failed = true;
       if (error instanceof BelError) io.stderr(`${error.format(file)}\n`);
       else io.stderr(`${file}: ${error instanceof Error ? error.message : String(error)}\n`);
     }
+  }
+
+  if (command === "test" && !failed && generated.length > 0) {
+    const run = io.runVitest ?? defaultIo.runVitest;
+    return run?.(generated) ?? 0;
   }
 
   return failed ? 1 : 0;

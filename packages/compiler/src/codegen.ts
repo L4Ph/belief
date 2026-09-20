@@ -10,6 +10,9 @@ import type {
   ScoreExpr,
 } from "./ast.ts";
 import { BelError, positionAt } from "./ast.ts";
+import type { QuestionSpec } from "./questions.ts";
+import { collectQuestions, conjoinedText, questionKey } from "./questions.ts";
+import { quote, readsName, splitTopLevel } from "./text.ts";
 
 export type GenerateOptions = {
   /** The module the generated code imports the runtime singleton from. */
@@ -166,24 +169,9 @@ class FlowEmitter {
   // -- collection ---------------------------------------------------------
 
   private collect(): void {
-    for (const binding of this.flow.bindings) {
-      switch (binding.value.kind) {
-        case "ScoreExpr":
-          this.addQuestion("score", binding.value.text, binding.value.rubric);
-          break;
-        case "ChoiceExpr":
-          this.addQuestion("choice", binding.value.text, binding.value.rubric);
-          break;
-        default:
-          this.collectLiterals(binding.value);
-      }
-    }
+    for (const spec of collectQuestions(this.flow, this.andStrategy)) this.addQuestion(spec);
     this.walkGuards(this.flow.guards, (guard) => {
-      if (guard.condition !== null) {
-        this.collectLiterals(guard.condition);
-        this.collectComparisons(guard.condition);
-        this.collectConjunctions(guard.condition);
-      }
+      if (guard.condition !== null) this.collectComparisons(guard.condition);
     });
     this.walkGuards(this.flow.guards, (guard) => this.collectIslandReads(guard));
   }
@@ -195,18 +183,7 @@ class FlowEmitter {
     }
   }
 
-  private collectLiterals(node: BeliefExpr): void {
-    if (node.kind === "BeliefLiteral") {
-      this.addQuestion("noul", node.text);
-      return;
-    }
-    if (node.kind === "And" || node.kind === "Or") {
-      for (const operand of node.operands) this.collectLiterals(operand);
-      return;
-    }
-    if (node.kind === "Not") this.collectLiterals(node.operand);
-  }
-
+  /** A level comparison names its rubric level; that label has to be checked. */
   private collectComparisons(node: BeliefExpr): void {
     if (node.kind === "And" || node.kind === "Or") {
       for (const operand of node.operands) this.collectComparisons(operand);
@@ -221,48 +198,6 @@ class FlowEmitter {
     }
   }
 
-  /**
-   * In `conjoin` mode a conjunction becomes a question of its own, so the
-   * batch has to carry it. The operands stay in the batch too: they may be
-   * read elsewhere, and dropping them would need a use analysis for a few
-   * tokens of input.
-   */
-  private collectConjunctions(node: BeliefExpr): void {
-    if (this.andStrategy !== "conjoin") return;
-    if (node.kind === "And") {
-      const text = this.conjoinedText(node.operands);
-      if (text !== null) this.addQuestion("noul", text);
-      for (const operand of node.operands) this.collectConjunctions(operand);
-      return;
-    }
-    if (node.kind === "Or") {
-      for (const operand of node.operands) this.collectConjunctions(operand);
-      return;
-    }
-    if (node.kind === "Not") this.collectConjunctions(node.operand);
-  }
-
-  /** The question `conjoin` would ask for a conjunction, or null if it cannot be phrased. */
-  private conjoinedText(operands: BeliefExpr[]): string | null {
-    const texts: string[] = [];
-    for (const operand of operands) {
-      const text = this.literalText(operand);
-      if (text === null) return null;
-      texts.push(text);
-    }
-    return texts.join(" and ");
-  }
-
-  /** The question text a node stands for, when it stands for exactly one. */
-  private literalText(node: BeliefExpr): string | null {
-    if (node.kind === "BeliefLiteral") return node.text;
-    if (node.kind === "BeliefRef") {
-      const value = this.lookup(node.name).value;
-      return value.kind === "BeliefLiteral" ? value.text : null;
-    }
-    return null;
-  }
-
   private collectIslandReads(guard: Guard): void {
     if (guard.action.kind === "GuardList") return;
     const text = guard.action.text;
@@ -271,13 +206,12 @@ class FlowEmitter {
     }
   }
 
-  private addQuestion(type: Question["type"], text: string, rubric?: string[]): void {
-    const key = `${type}\u0000${text}`;
+  private addQuestion(spec: QuestionSpec): void {
+    const key = questionKey(spec);
     if (this.questionIndex.has(key)) return;
     const id = String(this.questions.length);
     this.questionIndex.set(key, this.questions.length);
-    if (type === "noul") this.questions.push({ id, type, text });
-    else this.questions.push({ id, type, text, rubric: rubric ?? [] });
+    this.questions.push({ ...spec, id } as Question);
   }
 
   // -- guards -------------------------------------------------------------
@@ -323,7 +257,8 @@ class FlowEmitter {
       case "Comparison":
         return this.comparison(node.name, node.operator, node.operand, node.span.start);
       case "And": {
-        const conjoined = this.andStrategy === "conjoin" ? this.conjoinedText(node.operands) : null;
+        const conjoined =
+          this.andStrategy === "conjoin" ? conjoinedText(this.flow, node.operands) : null;
         if (conjoined !== null) return `__bel.number(${this.referenceByText(conjoined)})`;
         return `__bel.composeAnd(${node.operands.map((o) => this.operand(o)).join(", ")})`;
       }
@@ -506,24 +441,6 @@ function parameterNames(params: string): string[] | null {
 }
 
 /** Split on commas that are not inside brackets. */
-function splitTopLevel(text: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = "";
-  for (const char of text) {
-    if ("({[<".includes(char)) depth += 1;
-    if (")}]>".includes(char)) depth -= 1;
-    if (char === "," && depth === 0) {
-      parts.push(current);
-      current = "";
-      continue;
-    }
-    current += char;
-  }
-  parts.push(current);
-  return parts;
-}
-
 /** Re-indent a `{ … }` block to sit at `depth`, keeping its relative indentation. */
 function reindentBlock(text: string, depth: number): string {
   const pad = "  ".repeat(depth);
@@ -540,12 +457,4 @@ function reindentBlock(text: string, depth: number): string {
       return `${pad}${line.slice(floor)}`;
     })
     .join("\n");
-}
-
-function readsName(text: string, name: string): boolean {
-  return new RegExp(`(^|[^A-Za-z0-9_$])${name}(?![A-Za-z0-9_$])`).test(text);
-}
-
-function quote(text: string): string {
-  return `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

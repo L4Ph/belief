@@ -212,7 +212,7 @@ test "a name"
   });
 });
 
-test("a test block captures its floor, cassette and body lines", () => {
+test("a test block captures its lines, floor blocks and cassette", () => {
   const program = parseBel(`test.snapshot "production behaviour"
   record "cassettes/support.v1.json"
   with confidence_floor 0.6
@@ -222,9 +222,15 @@ test("a test block captures its floor, cassette and body lines", () => {
   expect(program.body[0]).toMatchObject({
     kind: "TestSnapshot",
     name: "production behaviour",
-    floor: 0.6,
-    cassette: "cassettes/support.v1.json",
-    lines: ["  assert support(t) is Escalate(_)", "action = support(t)"],
+    items: [
+      { kind: "Record", path: "cassettes/support.v1.json" },
+      {
+        kind: "Floor",
+        value: 0.6,
+        items: [{ kind: "Line", text: "assert support(t) is Escalate(_)" }],
+      },
+      { kind: "Line", text: "action = support(t)" },
+    ],
   });
 });
 

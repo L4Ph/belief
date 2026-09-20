@@ -88,15 +88,16 @@ export type MockValue =
   | { kind: "Scalar"; value: number | string }
   | { kind: "Object"; fields: Record<string, number | string> };
 
+/** A line of an action island, or the `with confidence_floor` block around some. */
+export type TestItem =
+  | { kind: "Line"; text: string }
+  | { kind: "Floor"; value: number; items: TestItem[] }
+  | { kind: "Record"; path: string };
+
 export type TestDecl = {
   kind: "Test" | "TestSnapshot";
   name: string;
-  /** `with confidence_floor n` */
-  floor: number | null;
-  /** `record "path"` */
-  cassette: string | null;
-  /** Body lines, raw, with their indentation stripped of the block's own prefix. */
-  lines: string[];
+  items: TestItem[];
   span: Span;
 };
 

@@ -1,2 +1,4 @@
-/** Placeholder entry point. Mock / cassette runtimes land in M6. */
-export const NAME = "@bel/testkit";
+export { createMockRuntime } from "./mock.ts";
+export type { MockTable, MockValue } from "./mock.ts";
+export { createCassetteRuntime, readCassette } from "./cassette.ts";
+export type { CassetteOptions } from "./cassette.ts";

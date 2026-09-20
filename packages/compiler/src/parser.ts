@@ -18,6 +18,7 @@ import type {
   ScoreExpr,
   Span,
   TestDecl,
+  TestItem,
   TypeDecl,
 } from "./ast.ts";
 import { BelError, BelParseError, positionAt } from "./ast.ts";
@@ -450,11 +451,21 @@ class Parser {
     this.skipSpaces();
     const name = this.string();
     this.expectEndOfLine();
+    const items = this.testItems(null);
+    if (items.length === 0) this.fail("expected at least one line in the test body");
+    return { kind, name, items, span: this.span(start) };
+  }
 
-    const lines: string[] = [];
-    let floor: number | null = null;
-    let cassette: string | null = null;
-    let baseIndent: string | null = null;
+  /**
+   * The body of a test, as a tree of lines.
+   *
+   * `parent` is the indentation of the enclosing `with` block, if any: every
+   * item has to be more indented than that, and all items at one level share
+   * the indentation of the first.
+   */
+  private testItems(parent: string | null): TestItem[] {
+    const items: TestItem[] = [];
+    let base: string | null = null;
 
     for (;;) {
       this.skipBlankLines();
@@ -462,27 +473,30 @@ class Parser {
       const lineStart = this.i;
       const indent = this.readIndent();
       if (indent === "") break;
-      baseIndent ??= indent;
-      if (!indent.startsWith(baseIndent)) break;
-      const text = this.source.slice(lineStart + baseIndent.length, this.lineEnd(lineStart));
+      if (parent !== null && !(indent.startsWith(parent) && indent.length > parent.length)) break;
+      base ??= indent;
+      if (!indent.startsWith(base)) break;
+
+      const text = this.source.slice(lineStart + base.length, this.lineEnd(lineStart));
       this.i = this.lineEnd(lineStart);
       this.expectEndOfLine();
 
-      const directive = text.trim();
-      const floorMatch = /^with\s+confidence_floor\s+([0-9]+(?:\.[0-9]+)?)$/.exec(directive);
-      if (floorMatch) {
-        floor = Number(floorMatch[1]);
+      const floor = /^with\s+confidence_floor\s+([0-9]+(?:\.[0-9]+)?)\s*$/.exec(text);
+      if (floor !== null) {
+        items.push({ kind: "Floor", value: Number(floor[1]), items: this.testItems(indent) });
         continue;
       }
-      const recordMatch = /^record\s+"([^"]*)"$/.exec(directive);
-      if (recordMatch) {
-        cassette = recordMatch[1] as string;
+
+      const record = /^record\s+"([^"]*)"\s*$/.exec(text);
+      if (record !== null) {
+        items.push({ kind: "Record", path: record[1] as string });
         continue;
       }
-      lines.push(text);
+
+      items.push({ kind: "Line", text });
     }
 
-    return { kind, name, floor, cassette, lines, span: this.span(start) };
+    return items;
   }
 
   // -- cursor ---------------------------------------------------------------

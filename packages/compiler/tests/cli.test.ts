@@ -84,3 +84,54 @@ test("an unknown option fails", () => {
   expect(result.code).toBe(1);
   expect(result.err).toContain("unknown option");
 });
+
+test("bel test generates a test file and runs it", () => {
+  const dir = withSource(`import { reply, type Action, type Ticket } from "./actions.ts"
+
+flow f(t: Ticket): Action
+  "the user is angry" -> reply("a")
+  _ -> reply("b")
+
+mock beliefs
+  "the user is angry" => 0.0
+
+test "a calm user gets the fallback"
+  assert (await f({} as Ticket)) is Reply("b")
+`);
+  const ran: string[][] = [];
+  const code = main(["node", "bel", "test", join(dir, "f.bel")], {
+    stdout: () => {},
+    stderr: () => {},
+    runVitest: (files) => {
+      ran.push(files);
+      return 0;
+    },
+  });
+  expect(code).toBe(0);
+  expect(ran).toEqual([[join(dir, "f.bel.test.ts")]]);
+  const generated = readFileSync(join(dir, "f.bel.test.ts"), "utf8");
+  expect(generated).toContain(`test("a calm user gets the fallback"`);
+  expect(generated).toContain(`expect($actual?.type).toBe("Reply");`);
+});
+
+test("bel test is skipped when a file fails to compile", () => {
+  const dir = withSource(`flow f(t: Ticket)\n  _ -> reply("b")\n`);
+  let called = false;
+  const code = main(["node", "bel", "test", join(dir, "f.bel")], {
+    stdout: () => {},
+    stderr: () => {},
+    runVitest: () => {
+      called = true;
+      return 0;
+    },
+  });
+  expect(code).toBe(1);
+  expect(called).toBe(false);
+});
+
+test("a file with no tests is reported", () => {
+  const dir = withSource(`flow f(t: Ticket): Action\n  "a" -> reply("a")\n  _ -> reply("b")\n`);
+  const result = run(["test", join(dir, "f.bel")]);
+  expect(result.code).toBe(0);
+  expect(result.err).toContain("has no tests");
+});
