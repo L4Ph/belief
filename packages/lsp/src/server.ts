@@ -107,31 +107,67 @@ export class BelServer {
     }
   }
 
-  /** What the thing under the cursor is: a flow, or the binding it names. */
+  /**
+   * What the thing under the cursor is.
+   *
+   * TypeScript inside an island is out of reach: Zed runs a language server
+   * per buffer, and an injected region is syntax only, so no `tsc` will answer
+   * for a name in there. What can be answered is everything bel itself knows —
+   * the flow, the binding and its type, a rubric level, and the question a
+   * string asks.
+   */
   private hover(params: Record<string, unknown> | undefined): unknown {
     const where = this.at(params);
     if (where === null) return null;
     const program = safeParse(where.text);
     if (program === null) return null;
+    const flows = program.body.filter((decl): decl is FlowDecl => decl.kind === "FlowDecl");
+
+    // A string in a score, a choice or a guard is a question.
+    for (const decl of flows) {
+      for (const binding of decl.bindings) {
+        const value = binding.value;
+        if (value.kind !== "ScoreExpr" && value.kind !== "ChoiceExpr") continue;
+        const quoted = `"${value.text}"`;
+        const at = where.text.indexOf(quoted, value.span.start);
+        if (at !== -1 && where.offset >= at && where.offset <= at + quoted.length) {
+          return markdown(
+            `**${value.kind === "ScoreExpr" ? "score" : "choice"}** — ${quoted}`,
+            `asked by \`${binding.name}\` in \`${decl.name}\`\n\nlevels: ${value.rubric.join(" → ")}`,
+          );
+        }
+      }
+    }
 
     const name = wordWithOffset(where.text, where.offset)?.word;
     if (name === undefined) return null;
 
-    for (const decl of program.body) {
-      if (decl.kind !== "FlowDecl") continue;
+    for (const decl of flows) {
       if (decl.name === name) {
+        const guards = decl.guards.length;
+        const bindings = decl.bindings.length;
         return markdown(
           `\`\`\`bel\nflow ${decl.name}${decl.params}: ${decl.returnType}\n\`\`\``,
-          decl.bindings.length + decl.guards.length > 0
-            ? `${decl.bindings.length} binding(s), ${decl.guards.length} guard(s)`
-            : undefined,
+          `${bindings} binding(s), ${guards} guard(s)`,
         );
       }
       const binding = decl.bindings.find((candidate) => candidate.name === name);
       if (binding !== undefined) {
         return markdown(
-          `\`\`\`bel\nlet ${binding.name} = ${describeBinding(binding.value)}\n\`\`\``,
+          `\`\`\`bel\nlet ${binding.name}: ${belType(binding.value)} = ${describeBinding(binding.value)}\n\`\`\``,
           questionOf(binding.value),
+        );
+      }
+      for (const candidate of decl.bindings) {
+        const value = candidate.value;
+        if (value.kind !== "ScoreExpr" && value.kind !== "ChoiceExpr") continue;
+        const index = value.rubric.indexOf(name);
+        if (index === -1) continue;
+        return markdown(
+          `**${name}** — ${
+            value.kind === "ScoreExpr" ? `level ${index} of ${value.rubric.length}` : "an option"
+          }`,
+          `from \`${candidate.name}\` = ${value.kind === "ScoreExpr" ? "score" : "choice"} ${JSON.stringify(value.text)}`,
         );
       }
     }
@@ -192,6 +228,18 @@ function capabilities(): unknown {
     },
     serverInfo: { name: "bel", version: "0.0.0" },
   };
+}
+
+/** The bel type of a binding, which is as much as the language itself knows. */
+function belType(value: { kind: string } & Record<string, unknown>): string {
+  switch (value.kind) {
+    case "ScoreExpr":
+      return `score<${(value["rubric"] as string[]).length}>`;
+    case "ChoiceExpr":
+      return `choice<${(value["rubric"] as string[]).join(" | ")}>`;
+    default:
+      return "belief";
+  }
 }
 
 function markdown(value: string, detail?: string): unknown {

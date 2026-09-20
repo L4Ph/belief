@@ -112,7 +112,7 @@ test("hovering a binding shows what it asks", () => {
     },
   });
   const contents = (response?.result as { contents: { value: string } })?.contents.value;
-  expect(contents).toContain(`let urgency = score "how urgent?" in low | high`);
+  expect(contents).toContain(`let urgency: score<2> = score "how urgent?" in low | high`);
   expect(contents).toContain("asks the model");
 });
 
@@ -170,4 +170,55 @@ test("messages are framed with a content length", () => {
   const message = { jsonrpc: "2.0" as const, id: 1, result: null };
   const body = JSON.stringify(message);
   expect(frame(message)).toBe(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+});
+
+test("hovering a level explains which level it is", () => {
+  const server = new BelServer();
+  open(server, GOOD);
+  const [response] = request(server, {
+    jsonrpc: "2.0",
+    id: 6,
+    method: "textDocument/hover",
+    params: {
+      textDocument: { uri: "file:///support.bel" },
+      position: { line: 3, character: 14 },
+    },
+  });
+  const contents = (response?.result as { contents: { value: string } } | undefined)?.contents
+    .value;
+  expect(contents).toContain("level 1 of 2");
+});
+
+test("hovering a question says what kind of question it is", () => {
+  const server = new BelServer();
+  open(server, GOOD);
+  const [response] = request(server, {
+    jsonrpc: "2.0",
+    id: 7,
+    method: "textDocument/hover",
+    params: {
+      textDocument: { uri: "file:///support.bel" },
+      position: { line: 1, character: 30 },
+    },
+  });
+  const contents = (response?.result as { contents: { value: string } } | undefined)?.contents
+    .value;
+  expect(contents).toContain("levels: low → high");
+});
+
+test("a binding hover carries its bel type", () => {
+  const server = new BelServer();
+  open(server, GOOD);
+  const [response] = request(server, {
+    jsonrpc: "2.0",
+    id: 8,
+    method: "textDocument/hover",
+    params: {
+      textDocument: { uri: "file:///support.bel" },
+      position: { line: 1, character: 8 },
+    },
+  });
+  const contents = (response?.result as { contents: { value: string } } | undefined)?.contents
+    .value;
+  expect(contents).toContain("let urgency: score<2>");
 });
