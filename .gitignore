@@ -37,3 +37,15 @@ dist-ssr
 *.bel.test.ts
 !examples/**/*.bel.ts
 !examples/**/*.bel.test.ts
+
+# Rust build output, from Zed compiling the extension
+target/
+
+# Zed's own files for a dev extension
+.zed/
+editors/zed/extension.wasm
+editors/zed/grammars/
+editors/zed/Cargo.lock
+
+# A repomix dump is a reference, not a source file
+repomix-output-*.xml
