@@ -15,7 +15,18 @@ for file in ../../examples/*/*.bel; do
   fi
 done
 
+# Zed reads a language's queries from the extension, not from here, so the two
+# copies have to stay identical.
+for query in queries/*.scm; do
+  name=$(basename "$query")
+  extension="../zed/languages/bel/$name"
+  if ! diff -q "$query" "$extension" >/dev/null 2>&1; then
+    echo "FAIL $name differs from editors/zed/languages/bel/$name"
+    status=1
+  fi
+done
+
 if [ "$status" -eq 0 ]; then
-  echo "all examples parse"
+  echo "all examples parse; the queries Zed reads match the ones here"
 fi
 exit "$status"
