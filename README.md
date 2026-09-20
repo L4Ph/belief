@@ -36,12 +36,12 @@ flow will ask are known before it runs.
 
 ## Examples
 
-| Example                                      | What it shows                                                                              |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| [`examples/support`](examples/support)       | beliefs combined with `&`, a `score` compared against a level, a threshold, a fallback     |
-| [`examples/moderation`](examples/moderation) | a `choice` comparison, a high threshold, and a `confidence_floor` that changes the outcome |
-| [`examples/triage`](examples/triage)         | nested guards, four destinations, still one call to the model                              |
-| [`examples/leads`](examples/leads)           | a five-level rubric, and a recorded model answer replayed as a regression test             |
+| Example                                      | What it shows                                                                                                                                      |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`examples/support`](examples/support)       | beliefs combined with `&`, a `score` compared against a level, a threshold and a fallback; `vp run demo "…"` shows why a message went where it did |
+| [`examples/moderation`](examples/moderation) | a `choice` comparison, a high threshold, and a `confidence_floor` that changes the outcome                                                         |
+| [`examples/triage`](examples/triage)         | nested guards, four destinations, still one call to the model                                                                                      |
+| [`examples/leads`](examples/leads)           | a five-level rubric, and a recorded model answer replayed as a regression test                                                                     |
 
 Each one commits the generated TypeScript next to its `.bel` source, so the
 compiler's output is readable without running anything. A test in the compiler

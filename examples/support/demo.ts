@@ -23,10 +23,15 @@ const value = Object.fromEntries(last.evaluations.map((e) => [e.text, e.value]))
 console.log(`message  ${message}\n`);
 console.log("the model was asked once, for all of these:");
 for (const evaluation of last.evaluations) {
+  // A `score` answers with a level (an integer); a `noul` with a probability.
   const shown =
-    typeof evaluation.value === "number" ? evaluation.value.toFixed(2) : evaluation.value;
+    typeof evaluation.value !== "number"
+      ? evaluation.value
+      : Number.isInteger(evaluation.value)
+        ? `level ${evaluation.value}`
+        : evaluation.value.toFixed(2);
   console.log(
-    `  ${shown.padStart(5)}  confidence ${evaluation.confidence.toFixed(2)}  ${evaluation.text}`,
+    `${shown.padStart(7)}  confidence ${evaluation.confidence.toFixed(2)}  ${evaluation.text}`,
   );
 }
 
