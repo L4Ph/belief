@@ -324,3 +324,48 @@ test("threshold and indentation diagnostics carry their own codes", () => {
     }
   }
 });
+
+test("line comments are ignored everywhere a line can start", () => {
+  const flow = firstFlow(`// what this flow is for
+flow f(t: Ticket): Action
+  // why this guard exists
+  let urgency = score "how urgent?" in low | high // the level to compare against
+
+  urgency >= high -> reply("a") // and why this action
+  // a note before the fallback
+  _ -> reply("b")
+`);
+  expect(flow.bindings[0]?.name).toBe("urgency");
+  expect(flow.guards).toHaveLength(2);
+  expect(flow.guards[0]?.action).toMatchObject({
+    kind: "Island",
+    text: `reply("a") // and why this action`,
+  });
+});
+
+test("a comment does not become part of an untouched declaration", () => {
+  const program = parseBel(`// leading
+type Ticket = { message: string }
+
+flow f(t: Ticket): Action
+  _ -> reply("a")
+`);
+  expect(program.body[0]).toMatchObject({
+    kind: "TypeDecl",
+    raw: "type Ticket = { message: string }",
+  });
+});
+
+test("a comment inside a test body is kept for the reader", () => {
+  const program = parseBel(`test "a name"
+  // the mock table is per file
+  assert f(t) is _
+`);
+  expect(program.body[0]).toMatchObject({
+    kind: "Test",
+    items: [
+      { kind: "Line", text: "// the mock table is per file" },
+      { kind: "Line", text: "assert f(t) is _" },
+    ],
+  });
+});

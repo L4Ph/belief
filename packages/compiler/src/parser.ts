@@ -468,7 +468,9 @@ class Parser {
     let base: string | null = null;
 
     for (;;) {
-      this.skipBlankLines();
+      // Only truly blank lines are skipped here: a comment is a line of the
+      // test, and belongs in the generated file too.
+      this.skipBlankLinesOnly();
       if (this.eof) break;
       const lineStart = this.i;
       const indent = this.readIndent();
@@ -549,18 +551,44 @@ class Parser {
 
   private expectEndOfLine(): void {
     this.skipSpaces();
+    this.skipLineComment();
     if (this.eof) return;
     if (this.source[this.i] !== "\n") this.fail("expected end of line");
     this.i += 1;
   }
 
-  /** Advance past blank lines; the cursor ends at the start of a line with content, or at EOF. */
+  /** A `//` comment runs to the end of the line. `/* … *\/` is not supported in v0. */
+  private skipLineComment(): void {
+    if (!this.at("//")) return;
+    this.i = this.lineEnd(this.i);
+  }
+
+  /** Advance past lines that hold nothing at all. */
+  private skipBlankLinesOnly(): void {
+    while (!this.eof) {
+      const save = this.i;
+      this.skipSpaces();
+      if (this.eof) return;
+      if (this.source[this.i] !== "\n") {
+        this.i = save;
+        return;
+      }
+      this.i += 1;
+    }
+  }
+
+  /**
+   * Advance past blank lines and comment-only lines; the cursor ends at the
+   * start of a line with content, or at EOF.
+   */
   private skipBlankLines(): void {
     while (!this.eof) {
       const save = this.i;
       this.skipSpaces();
       if (this.eof) return;
-      if (this.source[this.i] === "\n") {
+      if (this.source[this.i] === "\n" || this.at("//")) {
+        this.i = this.lineEnd(this.i);
+        if (this.eof) return;
         this.i += 1;
         continue;
       }
