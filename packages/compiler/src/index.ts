@@ -1,2 +1,3 @@
-/** Placeholder entry point. The parser and code generator land in M1–M2. */
-export const NAME = "@bel/compiler";
+export * from "./ast.ts";
+export { parseBel } from "./parser.ts";
+export { matchBracket, scanRaw } from "./scanner.ts";

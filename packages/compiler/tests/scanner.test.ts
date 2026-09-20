@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { matchBracket } from "../src/scanner.ts";
+import { matchBracket, scanRaw } from "../src/scanner.ts";
 
 /** Convenience: the end offset of the bracket that opens at the first `{` or `(`. */
 function end(src: string): number {
@@ -91,4 +91,29 @@ test("the opening offset must be a bracket", () => {
   expect(result.ok).toBe(false);
   if (result.ok) throw new Error("expected failure");
   expect(result.reason).toBe("not-a-bracket");
+});
+
+test("scanRaw stops at the end of a line", () => {
+  const src = `import { a } from "x"\nnext`;
+  expect(src.slice(0, scanRaw(src, 0))).toBe(`import { a } from "x"`);
+});
+
+test("scanRaw follows brackets across lines", () => {
+  const src = `import {\n  a,\n  b,\n} from "x"\nnext`;
+  expect(src.slice(0, scanRaw(src, 0))).toBe(`import {\n  a,\n  b,\n} from "x"`);
+});
+
+test("scanRaw on a multi-line type declaration", () => {
+  const src = `type Ticket = {\n  message: string\n}\nflow f(t: Ticket): Action\n`;
+  expect(src.slice(0, scanRaw(src, 0))).toBe(`type Ticket = {\n  message: string\n}`);
+});
+
+test("scanRaw ignores brackets inside strings and comments", () => {
+  const src = `type A = "{" // }\ntype B = 1`;
+  expect(src.slice(0, scanRaw(src, 0))).toBe(`type A = "{" // }`);
+});
+
+test("scanRaw runs to EOF when a bracket never closes", () => {
+  const src = `type A = {\n  x: string`;
+  expect(scanRaw(src, 0)).toBe(src.length);
 });

@@ -1,6 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import { NAME } from "../src/index.ts";
+import { parseBel } from "../src/index.ts";
 
-test("compiler module loads", () => {
-  expect(NAME).toBe("@bel/compiler");
+test("the package exposes the parser", () => {
+  const program = parseBel(`flow f(t: Ticket): Action\n  _ -> reply("ok")\n`);
+  expect(program.body[0]?.kind).toBe("FlowDecl");
 });
