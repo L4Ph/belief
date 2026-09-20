@@ -1,45 +1,27 @@
-import type { Message } from "./protocol.ts";
+import { createReader, frame } from "./framing.ts";
 import type { BelServer } from "./server.ts";
 
-/** Frame a message the way the protocol asks: a length header, then JSON. */
-export function frame(message: Message): string {
-  const body = JSON.stringify(message);
-  return `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
-}
+export { frame } from "./framing.ts";
 
 /**
  * Speak the protocol over a pair of streams.
  *
- * The reading is deliberately synchronous-per-chunk: a language server's
- * traffic is small, and a queue would be machinery without a purpose here.
+ * Messages are handled one at a time, in order: a request now waits on the
+ * TypeScript server behind it, and replies must come back in the order the
+ * editor asked for them.
  */
 export function runStdio(
   server: BelServer,
   input: NodeJS.ReadableStream = process.stdin,
   output: NodeJS.WritableStream = process.stdout,
 ): void {
-  let buffer = Buffer.alloc(0);
+  let queue: Promise<void> = Promise.resolve();
+  server.onMessage = (message) => output.write(frame(message));
 
-  const drain = (): void => {
-    for (;;) {
-      const headerEnd = buffer.indexOf("\r\n\r\n");
-      if (headerEnd === -1) return;
-      const header = buffer.subarray(0, headerEnd).toString("ascii");
-      const length = /Content-Length: (\d+)/i.exec(header);
-      if (length === null) {
-        buffer = buffer.subarray(headerEnd + 4);
-        continue;
-      }
-      const start = headerEnd + 4;
-      const size = Number(length[1]);
-      if (buffer.length < start + size) return;
-
-      const body = buffer.subarray(start, start + size).toString("utf8");
-      buffer = buffer.subarray(start + size);
+  const reader = createReader((message) => {
+    queue = queue.then(async () => {
       try {
-        for (const message of server.handle(JSON.parse(body) as Message)) {
-          output.write(frame(message));
-        }
+        for (const reply of await server.handle(message)) output.write(frame(reply));
       } catch (error) {
         output.write(
           frame({
@@ -52,11 +34,8 @@ export function runStdio(
           }),
         );
       }
-    }
-  };
-
-  input.on("data", (chunk: Buffer) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    drain();
+    });
   });
+
+  input.on("data", (chunk: Buffer) => reader.push(chunk));
 }

@@ -2,15 +2,57 @@ import { BelError, compile, generateTests, parseBel } from "@bel/compiler";
 import type { BeliefExpr, FlowDecl } from "@bel/compiler";
 import {
   ERROR_SEVERITY,
+  lineOffsetToPosition,
   lineRange,
   offsetAt,
   type Diagnostic,
   type Message,
   type Position,
 } from "./protocol.ts";
+import {
+  buildVirtualDocument,
+  toBelOffset,
+  toVirtualOffset,
+  type VirtualDocument,
+} from "./virtual.ts";
+import type { TypeScriptClient } from "./typescript.ts";
+import type { Range } from "./protocol.ts";
 import { wordWithOffset } from "./word.ts";
 
 const SOURCE = "bel";
+
+/** What bel needs of a TypeScript client, so a test can stand in for one. */
+export type TypeScriptBridge = Pick<
+  TypeScriptClient,
+  "start" | "open" | "change" | "close" | "request" | "dispose"
+>;
+
+export type BelServerOptions = {
+  /**
+   * Build the TypeScript client for the islands, once the workspace is known.
+   * Optional: without one bel answers for what bel knows and nothing more.
+   */
+  createTypescript?: (
+    rootUri: string | null,
+    onDiagnostics: (uri: string, diagnostics: unknown[]) => void,
+  ) => TypeScriptBridge | null;
+};
+
+/** The virtual file a bel file is handed to the TypeScript server as. */
+const PREVIEW = ".preview.ts";
+
+export function previewUriOf(belUri: string): string {
+  return `${belUri}${PREVIEW}`;
+}
+
+export function belUriOf(previewUri: string): string | null {
+  return previewUri.endsWith(PREVIEW) ? previewUri.slice(0, -PREVIEW.length) : null;
+}
+
+/** A `file://` URI as a path. */
+export function pathOf(uri: string): string {
+  return decodeURIComponent(uri.replace(/^file:\/\//, ""));
+}
 
 /**
  * A language server with no more machinery than the compiler already provides:
@@ -21,17 +63,49 @@ const SOURCE = "bel";
  * error. A list of errors is a compiler change, not a server one.
  */
 export class BelServer {
+  /**
+   * Where to send a message that nothing asked for. TypeScript diagnostics
+   * arrive when they arrive, and the editor has to hear about them.
+   */
+  onMessage: ((message: Message) => void) | null = null;
+
   private readonly documents = new Map<string, string>();
+  /** The TypeScript view of each document, when it has one. */
+  private readonly previews = new Map<string, VirtualDocument | null>();
+  /** The last TypeScript diagnostics, already mapped back to bel coordinates. */
+  private readonly typescriptDiagnostics = new Map<string, Diagnostic[]>();
+  private readonly versions = new Map<string, number>();
+  private readonly options: BelServerOptions;
+  private typescript: TypeScriptBridge | null = null;
+
+  constructor(options: BelServerOptions = {}) {
+    this.options = options;
+  }
 
   /** Handle one message. Returns the messages to send back, in order. */
-  handle(message: Message): Message[] {
+  async handle(message: Message): Promise<Message[]> {
     const params = message.params as never as Record<string, unknown> | undefined;
     switch (message.method) {
-      case "initialize":
+      case "initialize": {
+        const root =
+          (params?.["rootUri"] as string | null | undefined) ??
+          (params?.["workspaceFolders"] as { uri: string }[] | undefined)?.[0]?.uri ??
+          null;
+        const typescript = this.options.createTypescript?.(root, (uri, diagnostics) => {
+          this.receiveTypeScriptDiagnostics(uri, diagnostics);
+        });
+        if (typescript !== null && typescript !== undefined) {
+          this.typescript = typescript;
+          // Starting is asynchronous: the reply does not wait for TypeScript.
+          typescript.start();
+        }
         return [this.reply(message, capabilities())];
+      }
       case "initialized":
         return [];
       case "shutdown":
+        this.typescript?.dispose();
+        this.typescript = null;
         return [this.reply(message, null)];
       case "exit":
         return [];
@@ -42,9 +116,11 @@ export class BelServer {
       case "textDocument/didClose":
         return this.didClose(params);
       case "textDocument/hover":
-        return [this.reply(message, this.hover(params))];
+        return [this.reply(message, await this.hover(params))];
+      case "textDocument/definition":
+        return [this.reply(message, await this.forward(params, "textDocument/definition"))];
       case "textDocument/completion":
-        return [this.reply(message, this.completion(params))];
+        return [this.reply(message, await this.completion(params))];
       default:
         return message.id === undefined ? [] : [this.reply(message, null)];
     }
@@ -58,15 +134,18 @@ export class BelServer {
     const document = params?.["textDocument"] as { uri: string; text: string } | undefined;
     if (document === undefined) return [];
     this.documents.set(document.uri, document.text);
+    this.syncPreview(document.uri, document.text);
     return [this.publish(document.uri, document.text)];
   }
 
   private didChange(params: Record<string, unknown> | undefined): Message[] {
-    const document = params?.["textDocument"] as { uri: string } | undefined;
+    const document = params?.["textDocument"] as { uri: string; version?: number } | undefined;
     const changes = params?.["contentChanges"] as { text: string }[] | undefined;
     const text = changes?.at(-1)?.text;
     if (document === undefined || text === undefined) return [];
     this.documents.set(document.uri, text);
+    if (document.version !== undefined) this.versions.set(document.uri, document.version);
+    this.syncPreview(document.uri, text);
     return [this.publish(document.uri, text)];
   }
 
@@ -74,15 +153,155 @@ export class BelServer {
     const document = params?.["textDocument"] as { uri: string } | undefined;
     if (document === undefined) return [];
     this.documents.delete(document.uri);
+    this.previews.delete(document.uri);
+    this.typescriptDiagnostics.delete(document.uri);
+    this.typescript?.close(previewUriOf(document.uri));
     return [this.publish(document.uri, "", [])];
+  }
+
+  /** Hand the islands to the TypeScript server, or take them back. */
+  private syncPreview(uri: string, text: string): void {
+    const typescript = this.typescript;
+    if (typescript === null) return;
+
+    const preview = buildVirtualDocument(text);
+    this.previews.set(uri, preview);
+    const previewUri = previewUriOf(uri);
+    if (preview === null) {
+      typescript.close(previewUri);
+      return;
+    }
+    const version = (this.versions.get(uri) ?? 0) + 1;
+    this.versions.set(uri, version);
+    if (version === 1) typescript.open(previewUri, preview.text);
+    else typescript.change(previewUri, preview.text, version);
+
+    // TypeScript 7 answers diagnostics when asked rather than pushing them,
+    // so asking is part of handing over a document.
+    void typescript
+      .request("textDocument/diagnostic", { textDocument: { uri: previewUri } })
+      .then((result) => {
+        const items = (result as { items?: unknown[] } | null)?.items;
+        if (Array.isArray(items)) this.receiveTypeScriptDiagnostics(previewUri, items);
+      })
+      .catch((error: unknown) => {
+        this.onMessage?.({
+          jsonrpc: "2.0",
+          method: "window/logMessage",
+          params: {
+            type: 2,
+            message: `bel: could not read TypeScript diagnostics: ${String(error)}`,
+          },
+        });
+      });
+  }
+
+  /** Ask the TypeScript server the same question, in its coordinates. */
+  private async forward(
+    params: Record<string, unknown> | undefined,
+    method: string,
+  ): Promise<unknown> {
+    const where = this.at(params);
+    const typescript = this.typescript;
+    if (where === null || typescript === null) return null;
+    const preview = this.previews.get(where.uri);
+    if (preview === null || preview === undefined) return null;
+    const offset = toVirtualOffset(preview, where.offset);
+    if (offset === null) return null;
+    const result = await typescript.request(method, {
+      textDocument: { uri: previewUriOf(where.uri) },
+      position: lineOffsetToPosition(preview.text, offset),
+    });
+    return this.mapResult(preview, where.uri, result);
+  }
+
+  /** Locations come back in the virtual file; move them onto the bel file. */
+  private mapResult(preview: VirtualDocument, uri: string, result: unknown): unknown {
+    if (result === null || typeof result !== "object") return result;
+    const belText = this.documents.get(uri) ?? "";
+    if (Array.isArray(result)) {
+      return result
+        .map((item) => this.mapResult(preview, uri, item))
+        .filter((item) => item !== null);
+    }
+    const location = result as { uri?: string; range?: unknown; textEdit?: { range?: unknown } };
+    if (location.uri === previewUriOf(uri)) {
+      const range = this.mapRange(preview, belText, location.range);
+      return range === null ? null : { ...location, uri, range };
+    }
+    // A hover's range has no uri, and it is what the editor underlines.
+    if (
+      location.uri === undefined &&
+      location.range !== undefined &&
+      location.textEdit === undefined
+    ) {
+      const range = this.mapRange(preview, belText, location.range);
+      return range === null ? result : { ...location, range };
+    }
+    // A completion's edit is against the virtual file, which the editor has
+    // never heard of; dropping it is better than applying it in the wrong place.
+    if (location.textEdit !== undefined) return { ...location, textEdit: undefined };
+    return result;
+  }
+
+  private mapRange(preview: VirtualDocument, belText: string, range: unknown): Range | null {
+    const typed = range as { start?: Position; end?: Position } | undefined;
+    if (typed?.start === undefined || typed.end === undefined) return null;
+    const start = toBelOffset(preview, offsetAt(preview.text, typed.start));
+    const end = toBelOffset(preview, offsetAt(preview.text, typed.end));
+    if (start === null || end === null) return null;
+    return {
+      start: lineOffsetToPosition(belText, start),
+      end: lineOffsetToPosition(belText, Math.max(start, end)),
+    };
+  }
+
+  /** Diagnostics from the TypeScript server, moved onto the bel file. */
+  receiveTypeScriptDiagnostics(uri: string, diagnostics: unknown[]): void {
+    const belUri = belUriOf(uri);
+    if (belUri === null) return;
+    const preview = this.previews.get(belUri);
+    if (preview === null || preview === undefined) return;
+
+    const mapped: Diagnostic[] = [];
+    for (const item of diagnostics) {
+      const diagnostic = item as {
+        range?: { start: Position; end: Position };
+        message?: string;
+        code?: unknown;
+        severity?: number;
+      };
+      if (diagnostic.range === undefined) continue;
+      const start = toBelOffset(preview, offsetAt(preview.text, diagnostic.range.start));
+      const end = toBelOffset(preview, offsetAt(preview.text, diagnostic.range.end));
+      // A diagnostic in the synthetic context, rather than in an island, has
+      // nowhere to point in the bel file, and is not the author's problem.
+      if (start === null || end === null || end < start) continue;
+      mapped.push({
+        range: lineRange(this.documents.get(belUri) ?? "", start),
+        severity: severityOf(diagnostic.severity),
+        code:
+          typeof diagnostic.code === "string" || typeof diagnostic.code === "number"
+            ? String(diagnostic.code)
+            : "typescript",
+        source: "typescript",
+        message: diagnostic.message ?? "",
+      });
+    }
+    this.typescriptDiagnostics.set(belUri, mapped);
+    this.onMessage?.(this.publish(belUri, this.documents.get(belUri) ?? ""));
   }
 
   /** Compile the document and report whatever the compiler objects to. */
   private publish(uri: string, text: string, diagnostics?: Diagnostic[]): Message {
+    const merged = diagnostics ?? [
+      ...this.diagnostics(uri, text),
+      ...(this.typescriptDiagnostics.get(uri) ?? []),
+    ];
     return {
       jsonrpc: "2.0",
       method: "textDocument/publishDiagnostics",
-      params: { uri, diagnostics: diagnostics ?? this.diagnostics(uri, text) },
+      params: { uri, diagnostics: merged },
     };
   }
 
@@ -116,7 +335,7 @@ export class BelServer {
    * the flow, the binding and its type, a rubric level, and the question a
    * string asks.
    */
-  private hover(params: Record<string, unknown> | undefined): unknown {
+  private async hover(params: Record<string, unknown> | undefined): Promise<unknown> {
     const where = this.at(params);
     if (where === null) return null;
     const program = safeParse(where.text);
@@ -171,7 +390,8 @@ export class BelServer {
         );
       }
     }
-    return null;
+    // Nothing bel knows; the islands are TypeScript's business.
+    return this.forward(params, "textDocument/hover");
   }
 
   /**
@@ -207,14 +427,20 @@ export class BelServer {
     return null;
   }
 
-  private at(params: Record<string, unknown> | undefined): { text: string; offset: number } | null {
+  private at(
+    params: Record<string, unknown> | undefined,
+  ): { uri: string; text: string; offset: number } | null {
     const document = params?.["textDocument"] as { uri: string } | undefined;
     const position = params?.["position"] as Position | undefined;
     if (document === undefined || position === undefined) return null;
     const text = this.documents.get(document.uri);
     if (text === undefined) return null;
-    return { text, offset: offsetAt(text, position) };
+    return { uri: document.uri, text, offset: offsetAt(text, position) };
   }
+}
+
+function severityOf(severity: number | undefined): 1 | 2 | 3 | 4 {
+  return severity === 2 ? 2 : severity === 3 ? 3 : severity === 4 ? 4 : 1;
 }
 
 function capabilities(): unknown {
@@ -224,7 +450,8 @@ function capabilities(): unknown {
       // would only save a string copy.
       textDocumentSync: 1,
       hoverProvider: true,
-      completionProvider: { triggerCharacters: [">", "<", "="] },
+      definitionProvider: true,
+      completionProvider: { triggerCharacters: [">", "<", "=", "."] },
     },
     serverInfo: { name: "bel", version: "0.0.0" },
   };

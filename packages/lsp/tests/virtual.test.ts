@@ -40,6 +40,12 @@ test("each flow becomes a function with its bindings declared", () => {
   expect(built.text).toContain("const urgency = 0;");
 });
 
+test("the invented context is marked as used, so it is not reported", () => {
+  const built = document();
+  expect(built.text).toContain("  void t;");
+  expect(built.text).toContain("  void urgency;");
+});
+
 test("an expression island becomes a statement, a block island stays one", () => {
   const built = document();
   expect(built.text).toContain("escalate(t);");

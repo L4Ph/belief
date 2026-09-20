@@ -136,11 +136,18 @@ class Builder {
       const zero = binding.value.kind === "ChoiceExpr" ? '""' : "0";
       this.pushLine(`  const ${binding.name} = ${zero};`);
     }
+    // A project with `noUnusedLocals` would otherwise report the context this
+    // file invents as unused, on the lines the bel author did write.
+    for (const name of [...parameterNames(flow.params), ...flow.bindings.map((b) => b.name)]) {
+      this.pushLine(`  void ${name};`);
+    }
     for (const guard of guardsOf(flow)) {
       if (guard.action.kind === "GuardList") continue;
       this.action(guard.action.span.start, guard.action.span.end, guard.action.text);
     }
-    this.push("}\n");
+    // Without this, a function whose declared type is not `void` never returns
+    // in TypeScript's eyes, and that error lands on the signature.
+    this.push('  throw new Error("unreachable");\n}\n');
   }
 
   /** Copy a fragment, locating it in the source from `after`. */
@@ -202,6 +209,15 @@ class Builder {
     if (to <= from) return;
     this.copy(item.span.start + from, item.span.start + to);
   }
+}
+
+/** The names of a raw parameter list, in `(t: Ticket, n: number)` order. */
+function parameterNames(params: string): string[] {
+  return params
+    .slice(1, -1)
+    .split(",")
+    .map((part) => /^\s*([A-Za-z_$][A-Za-z0-9_$]*)/.exec(part)?.[1])
+    .filter((name): name is string => name !== undefined);
 }
 
 function guardsOf(flow: FlowDecl): Guard[] {

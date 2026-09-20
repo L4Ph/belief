@@ -3,11 +3,11 @@ import { BelServer } from "../src/server.ts";
 import { frame } from "../src/stdio.ts";
 import type { Message } from "../src/protocol.ts";
 
-function request(server: BelServer, message: Message): Message[] {
+async function request(server: BelServer, message: Message): Promise<Message[]> {
   return server.handle(message);
 }
 
-function open(server: BelServer, text: string): Message[] {
+function open(server: BelServer, text: string): Promise<Message[]> {
   return request(server, {
     jsonrpc: "2.0",
     method: "textDocument/didOpen",
@@ -27,8 +27,12 @@ const GOOD = `flow f(t: Ticket): Action
   _ -> reply("b")
 `;
 
-test("initialize advertises what the server can do", () => {
-  const [response] = request(new BelServer(), { jsonrpc: "2.0", id: 1, method: "initialize" });
+test("initialize advertises what the server can do", async () => {
+  const [response] = await request(new BelServer(), {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+  });
   expect(response?.id).toBe(1);
   expect(response?.result).toMatchObject({
     capabilities: { textDocumentSync: 1, hoverProvider: true },
@@ -36,15 +40,15 @@ test("initialize advertises what the server can do", () => {
   });
 });
 
-test("a good document has no diagnostics", () => {
+test("a good document has no diagnostics", async () => {
   const server = new BelServer();
-  expect(diagnosticsOf(open(server, GOOD))).toEqual([]);
+  expect(diagnosticsOf(await open(server, GOOD))).toEqual([]);
 });
 
-test("a compile error is published with its code and position", () => {
+test("a compile error is published with its code and position", async () => {
   const server = new BelServer();
   const diagnostics = diagnosticsOf(
-    open(server, `flow f(t: Ticket): Action\n  "x" -> reply("a")\n`),
+    await open(server, `flow f(t: Ticket): Action\n  "x" -> reply("a")\n`),
   );
   expect(diagnostics).toHaveLength(1);
   expect(diagnostics[0]?.code).toBe("missing-fallback");
@@ -54,16 +58,16 @@ test("a compile error is published with its code and position", () => {
   });
 });
 
-test("a syntax error is published too", () => {
+test("a syntax error is published too", async () => {
   const server = new BelServer();
-  const diagnostics = diagnosticsOf(open(server, `flow f(t: Ticket)\n  _ -> reply("b")\n`));
+  const diagnostics = diagnosticsOf(await open(server, `flow f(t: Ticket)\n  _ -> reply("b")\n`));
   expect(diagnostics[0]?.code).toBe("parse-error");
 });
 
-test("a test with no answers is caught while typing", () => {
+test("a test with no answers is caught while typing", async () => {
   const server = new BelServer();
   const diagnostics = diagnosticsOf(
-    open(
+    await open(
       server,
       `${GOOD}
 test "a ticket"
@@ -74,10 +78,10 @@ test "a ticket"
   expect(diagnostics[0]?.code).toBe("test-without-answers");
 });
 
-test("editing clears the diagnostic", () => {
+test("editing clears the diagnostic", async () => {
   const server = new BelServer();
-  open(server, `flow f(t: Ticket): Action\n  "x" -> reply("a")\n`);
-  const messages = request(server, {
+  await open(server, `flow f(t: Ticket): Action\n  "x" -> reply("a")\n`);
+  const messages = await request(server, {
     jsonrpc: "2.0",
     method: "textDocument/didChange",
     params: {
@@ -88,10 +92,10 @@ test("editing clears the diagnostic", () => {
   expect(diagnosticsOf(messages)).toEqual([]);
 });
 
-test("closing clears the diagnostic", () => {
+test("closing clears the diagnostic", async () => {
   const server = new BelServer();
-  open(server, `flow f(t: Ticket): Action\n  "x" -> reply("a")\n`);
-  const messages = request(server, {
+  await open(server, `flow f(t: Ticket): Action\n  "x" -> reply("a")\n`);
+  const messages = await request(server, {
     jsonrpc: "2.0",
     method: "textDocument/didClose",
     params: { textDocument: { uri: "file:///support.bel" } },
@@ -99,10 +103,10 @@ test("closing clears the diagnostic", () => {
   expect(diagnosticsOf(messages)).toEqual([]);
 });
 
-test("hovering a binding shows what it asks", () => {
+test("hovering a binding shows what it asks", async () => {
   const server = new BelServer();
-  open(server, GOOD);
-  const [response] = request(server, {
+  await open(server, GOOD);
+  const [response] = await request(server, {
     jsonrpc: "2.0",
     id: 2,
     method: "textDocument/hover",
@@ -116,10 +120,10 @@ test("hovering a binding shows what it asks", () => {
   expect(contents).toContain("asks the model");
 });
 
-test("hovering a flow shows its signature", () => {
+test("hovering a flow shows its signature", async () => {
   const server = new BelServer();
-  open(server, GOOD);
-  const [response] = request(server, {
+  await open(server, GOOD);
+  const [response] = await request(server, {
     jsonrpc: "2.0",
     id: 3,
     method: "textDocument/hover",
@@ -133,10 +137,10 @@ test("hovering a flow shows its signature", () => {
   expect(contents).toContain("flow f(t: Ticket): Action");
 });
 
-test("completion after a comparison offers the levels", () => {
+test("completion after a comparison offers the levels", async () => {
   const server = new BelServer();
-  open(server, GOOD);
-  const [response] = request(server, {
+  await open(server, GOOD);
+  const [response] = await request(server, {
     jsonrpc: "2.0",
     id: 4,
     method: "textDocument/completion",
@@ -151,10 +155,10 @@ test("completion after a comparison offers the levels", () => {
   expect(items[1]?.detail).toBe("level 1 of how urgent?");
 });
 
-test("completion elsewhere offers nothing", () => {
+test("completion elsewhere offers nothing", async () => {
   const server = new BelServer();
-  open(server, GOOD);
-  const [response] = request(server, {
+  await open(server, GOOD);
+  const [response] = await request(server, {
     jsonrpc: "2.0",
     id: 5,
     method: "textDocument/completion",
@@ -166,16 +170,18 @@ test("completion elsewhere offers nothing", () => {
   expect(response?.result).toBeNull();
 });
 
-test("messages are framed with a content length", () => {
-  const message = { jsonrpc: "2.0" as const, id: 1, result: null };
-  const body = JSON.stringify(message);
-  expect(frame(message)).toBe(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+test("messages are framed with a byte length, not a character count", () => {
+  const message = { jsonrpc: "2.0" as const, id: 1, result: "urgent — 緊急" };
+  const framed = frame(message).toString("utf8");
+  const body = framed.slice(framed.indexOf("\r\n\r\n") + 4);
+  expect(framed).toBe(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+  expect(Buffer.byteLength(body)).toBeGreaterThan(body.length);
 });
 
-test("hovering a level explains which level it is", () => {
+test("hovering a level explains which level it is", async () => {
   const server = new BelServer();
-  open(server, GOOD);
-  const [response] = request(server, {
+  await open(server, GOOD);
+  const [response] = await request(server, {
     jsonrpc: "2.0",
     id: 6,
     method: "textDocument/hover",
@@ -189,10 +195,10 @@ test("hovering a level explains which level it is", () => {
   expect(contents).toContain("level 1 of 2");
 });
 
-test("hovering a question says what kind of question it is", () => {
+test("hovering a question says what kind of question it is", async () => {
   const server = new BelServer();
-  open(server, GOOD);
-  const [response] = request(server, {
+  await open(server, GOOD);
+  const [response] = await request(server, {
     jsonrpc: "2.0",
     id: 7,
     method: "textDocument/hover",
@@ -206,10 +212,10 @@ test("hovering a question says what kind of question it is", () => {
   expect(contents).toContain("levels: low → high");
 });
 
-test("a binding hover carries its bel type", () => {
+test("a binding hover carries its bel type", async () => {
   const server = new BelServer();
-  open(server, GOOD);
-  const [response] = request(server, {
+  await open(server, GOOD);
+  const [response] = await request(server, {
     jsonrpc: "2.0",
     id: 8,
     method: "textDocument/hover",
