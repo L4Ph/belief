@@ -51,8 +51,22 @@ package fails if the two drift apart.
 cd examples/support
 bel build support.bel   # regenerate support.bel.ts
 bel test support.bel    # run the tests (mocked, no network)
-TYPESAFE_API_KEY=... node main.ts   # or ask the real model
+node main.ts            # or ask the real model and print the trace
 ```
+
+## Talking to the model
+
+Copy `.env.example` to `.env` at the repository root and put a key in it. The
+`bel` command reads the `.env` in the directory it runs from, and each example's
+`main.ts` reads both the root's and its own. `@bel/runtime` itself reads
+nothing: it uses the environment it is handed.
+
+| Variable           | Meaning                                                        |
+| ------------------ | -------------------------------------------------------------- |
+| `TYPESAFE_API_KEY` | the key (`TYPE_SAFE_API_KEY` is accepted too)                  |
+| `BEL_MODEL`        | the model, `jev-latest` by default                             |
+| `BEL_API_URL`      | the endpoint, the TypeSafe service by default                  |
+| `BEL_RECORD`       | set to `1` to record a `test.snapshot` instead of replaying it |
 
 ## Commands
 

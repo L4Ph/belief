@@ -47,8 +47,24 @@ function runVitest(files: string[]): number {
   return result.status ?? 1;
 }
 
+/**
+ * Load `.env` from the working directory, if there is one.
+ *
+ * A CLI reading `.env` is what people expect, and recording a cassette needs a
+ * key in the environment. A library never does this: `@bel/runtime` reads the
+ * environment it is given and nothing else.
+ */
+function loadEnvFile(): void {
+  try {
+    process.loadEnvFile();
+  } catch {
+    // No `.env`; the shell's environment is all there is.
+  }
+}
+
 /** Run the command line. Returns the process exit code. */
 export function main(argv: string[], io: CliIo = defaultIo): number {
+  loadEnvFile();
   const args = argv.slice(2);
   if (args.length === 0) {
     io.stderr(USAGE);

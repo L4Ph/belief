@@ -8,7 +8,7 @@
     "build": "bel build moderation.bel",
     "test": "vp test",
     "check": "vp check",
-    "live": "node --env-file-if-exists=.env main.ts"
+    "live": "node --env-file-if-exists=../../.env --env-file-if-exists=.env main.ts"
   },
   "dependencies": {
     "@bel/runtime": "workspace:*"
