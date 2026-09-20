@@ -317,14 +317,14 @@ class FlowEmitter {
     this.checkIsBelief(node);
     switch (node.kind) {
       case "BeliefLiteral":
-        return `${this.referenceByText(node.text)}.value`;
+        return `__bel.number(${this.referenceByText(node.text)})`;
       case "BeliefRef":
         return this.resolve(node.name, "value");
       case "Comparison":
         return this.comparison(node.name, node.operator, node.operand, node.span.start);
       case "And": {
         const conjoined = this.andStrategy === "conjoin" ? this.conjoinedText(node.operands) : null;
-        if (conjoined !== null) return `${this.referenceByText(conjoined)}.value`;
+        if (conjoined !== null) return `__bel.number(${this.referenceByText(conjoined)})`;
         return `__bel.composeAnd(${node.operands.map((o) => this.operand(o)).join(", ")})`;
       }
       case "Or":
@@ -372,11 +372,15 @@ class FlowEmitter {
     const binding = this.lookup(name);
     if (binding.value.kind === "ScoreExpr" || binding.value.kind === "ChoiceExpr") {
       const reference = this.referenceFor(binding.value);
-      return mode === "value" ? `${reference}.value` : reference;
+      if (mode === "operand") return reference;
+      // A score is a number; a choice is an option name.
+      return binding.value.kind === "ScoreExpr"
+        ? `__bel.number(${reference})`
+        : `${reference}.value`;
     }
     if (binding.value.kind === "BeliefLiteral") {
       const reference = this.referenceByText(binding.value.text);
-      return mode === "value" ? `${reference}.value` : reference;
+      return mode === "value" ? `__bel.number(${reference})` : reference;
     }
     if (this.visiting.has(name)) {
       throw new BelError(

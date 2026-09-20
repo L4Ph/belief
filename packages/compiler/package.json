@@ -3,12 +3,16 @@
   "version": "0.0.0",
   "description": "bel compiler: .bel source to TypeScript",
   "license": "MIT",
+  "bin": {
+    "compiler": "./dist/bin.mjs"
+  },
   "files": [
     "dist"
   ],
   "type": "module",
   "exports": {
     ".": "./dist/index.mjs",
+    "./bin": "./dist/bin.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {

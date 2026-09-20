@@ -27,7 +27,7 @@ export async function support(t: Ticket): Promise<Action> {
     ],
     t,
   );
-  if (__bel.det($b[0].value >= 2) >= 0.5) {
+  if (__bel.det(__bel.number($b[0]) >= 2) >= 0.5) {
     __bel.mark("support", 0);
     return escalate(t);
   }
@@ -53,9 +53,9 @@ flow triage(t: Ticket): Action
   _ -> reply("ok")
 `);
   expect(output).toContain(`import { refund } from "./actions.ts"`);
-  expect(output).toContain(`  if ($b[0].value >= 0.5) {
+  expect(output).toContain(`  if (__bel.number($b[0]) >= 0.5) {
     __bel.mark("triage", 0);
-    if ($b[1].value >= 0.5) {
+    if (__bel.number($b[1]) >= 0.5) {
       return refund(t);
     }
     return reply("ok");
@@ -74,8 +74,8 @@ test("an action island reads only the bindings it mentions", () => {
   }
   _ -> reply("ok")
 `);
-  expect(output).toContain("  const urgency = $b[0].value;");
-  expect(output).toContain(`  if ($b[1].value >= 0.5) {
+  expect(output).toContain("  const urgency = __bel.number($b[0]);");
+  expect(output).toContain(`  if (__bel.number($b[1]) >= 0.5) {
     __bel.mark("f", 0);`);
   expect(output).toContain(`    {
       const level = urgency
@@ -222,7 +222,7 @@ test("the conjoin strategy asks for the conjunction as one question", () => {
   expect(output).toContain(
     `{ id: "2", type: "noul", text: "the user is angry and asks for a refund" }`,
   );
-  expect(output).toContain("if ($b[2].value >= 0.7) {");
+  expect(output).toContain("if (__bel.number($b[2]) >= 0.7) {");
   expect(output).not.toContain("composeAnd");
 });
 

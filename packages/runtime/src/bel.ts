@@ -117,6 +117,18 @@ export const __bel = {
     return holds ? 1 : 0;
   },
 
+  /**
+   * The numeric reading of an evaluation.
+   *
+   * Generated code needs this rather than `.value`: the array an `evaluate`
+   * call returns is a union, so `.value` is `string | number` even where the
+   * question is known to be a belief or a score. A choice has no numeric
+   * reading and throws — the compiler rejects that shape before it gets here.
+   */
+  number(operand: number | Evaluation): number {
+    return numeric(operand);
+  },
+
   /** Record which guard fired, completing the trace opened by `evaluate`. */
   mark(flow: string, guard: number): void {
     const limit = active().traceLimit ?? DEFAULT_TRACE_LIMIT;
