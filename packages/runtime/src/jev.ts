@@ -39,7 +39,9 @@ export function createJevRuntime(options: JevOptions = {}): JevRuntime {
     async evaluate(questions: Question[], state: unknown): Promise<Evaluation[]> {
       if (questions.length === 0) return [];
 
-      const apiKey = options.apiKey ?? process.env.TYPESAFE_API_KEY;
+      // `TYPE_SAFE_API_KEY` is the spelling the TypeSafe examples use; accept it too.
+      const apiKey =
+        options.apiKey ?? process.env.TYPESAFE_API_KEY ?? process.env.TYPE_SAFE_API_KEY;
       if (apiKey === undefined || apiKey === "") {
         throw new Error(
           "TYPESAFE_API_KEY is not set. Set it, or configure another runtime with configureBel().",

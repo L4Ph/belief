@@ -157,3 +157,15 @@ test("a missing api key is an error", async () => {
     if (previous !== undefined) process.env.TYPESAFE_API_KEY = previous;
   }
 });
+
+test("the TYPE_SAFE_API_KEY spelling is accepted too", async () => {
+  const previous = process.env.TYPE_SAFE_API_KEY;
+  process.env.TYPE_SAFE_API_KEY = "k";
+  try {
+    const runtime = createJevRuntime({ fetch: stubFetch(ANSWER).fetchImpl });
+    await expect(runtime.evaluate(QUESTIONS, {})).resolves.toHaveLength(3);
+  } finally {
+    if (previous === undefined) delete process.env.TYPE_SAFE_API_KEY;
+    else process.env.TYPE_SAFE_API_KEY = previous;
+  }
+});
