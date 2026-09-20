@@ -16,6 +16,18 @@ export type GenerateOptions = {
   runtime?: string;
   /** The original source, used to report positions on generated errors. */
   source?: string;
+  /**
+   * How `&` is evaluated.
+   *
+   * `mul` multiplies the operands, assuming they are independent. `conjoin`
+   * asks the model for the conjunction as one question instead, which is more
+   * accurate for correlated statements at the cost of an extra question.
+   *
+   * This is a compile-time choice, not a runtime one: `conjoin` changes the
+   * set of questions a flow asks, and the whole point of preflight collecting
+   * them statically is that the set is knowable before the program runs.
+   */
+  andStrategy?: "mul" | "conjoin";
 };
 
 type Question =
@@ -33,17 +45,20 @@ const DEFAULT_THRESHOLD = 0.5;
  */
 export function generate(program: Program, options: GenerateOptions = {}): string {
   const runtime = options.runtime ?? "@bel/runtime";
-  return new Emitter(runtime, options.source).program(program);
+  const andStrategy = options.andStrategy ?? "mul";
+  return new Emitter(runtime, options.source, andStrategy).program(program);
 }
 
 class Emitter {
   private readonly out: string[] = [];
   private readonly runtime: string;
   private readonly source: string | undefined;
+  private readonly andStrategy: "mul" | "conjoin";
 
-  constructor(runtime: string, source: string | undefined) {
+  constructor(runtime: string, source: string | undefined, andStrategy: "mul" | "conjoin") {
     this.runtime = runtime;
     this.source = source;
+    this.andStrategy = andStrategy;
   }
 
   program(program: Program): string {
@@ -59,7 +74,7 @@ class Emitter {
           break;
         case "FlowDecl":
           this.out.push("");
-          this.out.push(new FlowEmitter(decl, this.source).emit());
+          this.out.push(new FlowEmitter(decl, this.source, this.andStrategy).emit());
           break;
         case "RouteDecl":
           throw new BelError(
@@ -91,10 +106,12 @@ class FlowEmitter {
 
   private readonly flow: FlowDecl;
   private readonly source: string | undefined;
+  private readonly andStrategy: "mul" | "conjoin";
 
-  constructor(flow: FlowDecl, source: string | undefined) {
+  constructor(flow: FlowDecl, source: string | undefined, andStrategy: "mul" | "conjoin") {
     this.flow = flow;
     this.source = source;
+    this.andStrategy = andStrategy;
   }
 
   emit(): string {
@@ -165,6 +182,7 @@ class FlowEmitter {
       if (guard.condition !== null) {
         this.collectLiterals(guard.condition);
         this.collectComparisons(guard.condition);
+        this.collectConjunctions(guard.condition);
       }
     });
     this.walkGuards(this.flow.guards, (guard) => this.collectIslandReads(guard));
@@ -201,6 +219,48 @@ class FlowEmitter {
     if (node.kind === "Comparison" && node.operand.kind === "Label") {
       this.labelLiteral(node.name, node.operand.name, node.span.start);
     }
+  }
+
+  /**
+   * In `conjoin` mode a conjunction becomes a question of its own, so the
+   * batch has to carry it. The operands stay in the batch too: they may be
+   * read elsewhere, and dropping them would need a use analysis for a few
+   * tokens of input.
+   */
+  private collectConjunctions(node: BeliefExpr): void {
+    if (this.andStrategy !== "conjoin") return;
+    if (node.kind === "And") {
+      const text = this.conjoinedText(node.operands);
+      if (text !== null) this.addQuestion("noul", text);
+      for (const operand of node.operands) this.collectConjunctions(operand);
+      return;
+    }
+    if (node.kind === "Or") {
+      for (const operand of node.operands) this.collectConjunctions(operand);
+      return;
+    }
+    if (node.kind === "Not") this.collectConjunctions(node.operand);
+  }
+
+  /** The question `conjoin` would ask for a conjunction, or null if it cannot be phrased. */
+  private conjoinedText(operands: BeliefExpr[]): string | null {
+    const texts: string[] = [];
+    for (const operand of operands) {
+      const text = this.literalText(operand);
+      if (text === null) return null;
+      texts.push(text);
+    }
+    return texts.join(" and ");
+  }
+
+  /** The question text a node stands for, when it stands for exactly one. */
+  private literalText(node: BeliefExpr): string | null {
+    if (node.kind === "BeliefLiteral") return node.text;
+    if (node.kind === "BeliefRef") {
+      const value = this.lookup(node.name).value;
+      return value.kind === "BeliefLiteral" ? value.text : null;
+    }
+    return null;
   }
 
   private collectIslandReads(guard: Guard): void {
@@ -254,6 +314,7 @@ class FlowEmitter {
 
   /** A belief value: a number a guard can threshold. */
   private value(node: BeliefExpr): string {
+    this.checkIsBelief(node);
     switch (node.kind) {
       case "BeliefLiteral":
         return `${this.referenceByText(node.text)}.value`;
@@ -261,8 +322,11 @@ class FlowEmitter {
         return this.resolve(node.name, "value");
       case "Comparison":
         return this.comparison(node.name, node.operator, node.operand, node.span.start);
-      case "And":
+      case "And": {
+        const conjoined = this.andStrategy === "conjoin" ? this.conjoinedText(node.operands) : null;
+        if (conjoined !== null) return `${this.referenceByText(conjoined)}.value`;
         return `__bel.composeAnd(${node.operands.map((o) => this.operand(o)).join(", ")})`;
+      }
       case "Or":
         return `__bel.composeOr(${node.operands.map((o) => this.operand(o)).join(", ")})`;
       case "Not":
@@ -277,7 +341,10 @@ class FlowEmitter {
    */
   private operand(node: BeliefExpr): string {
     if (node.kind === "BeliefLiteral") return this.referenceByText(node.text);
-    if (node.kind === "BeliefRef") return this.resolve(node.name, "operand");
+    if (node.kind === "BeliefRef") {
+      this.checkIsBelief(node);
+      return this.resolve(node.name, "operand");
+    }
     return this.value(node);
   }
 
@@ -285,6 +352,19 @@ class FlowEmitter {
     const right =
       operand.kind === "Level" ? String(operand.value) : this.labelLiteral(name, operand.name, at);
     return `__bel.det(${this.resolve(name, "value")} ${operator} ${right})`;
+  }
+
+  /** A `score` or `choice` is not a belief; only a comparison gives it a 0/1 reading. */
+  private checkIsBelief(node: BeliefExpr): void {
+    if (node.kind !== "BeliefRef") return;
+    const value = this.lookup(node.name).value;
+    if (value.kind !== "ScoreExpr" && value.kind !== "ChoiceExpr") return;
+    const kind = value.kind === "ScoreExpr" ? "score" : "choice";
+    throw new BelError(
+      `\`${node.name}\` is a ${kind}; compare it with one of its levels`,
+      "bad-comparison",
+      this.where(node.span.start),
+    );
   }
 
   /** Resolve a bound name into an expression, expanding aliases of composite beliefs. */

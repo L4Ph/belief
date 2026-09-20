@@ -1,10 +1,5 @@
-/**
- * Confidence of a `noul` evaluation.
- *
- * TypeSafe Jev answers a `noul` with a probability only (`{ type: "noul", noul }`),
- * so bel defines confidence as the normalised distance from 0.5.
- * See RFC 0001 (bel v0), "Types".
- */
-export function noulConfidence(p: number): number {
-  return Math.abs(p - 0.5) * 2;
-}
+export * from "./types.ts";
+export { __bel, configureBel, resetBel, trace } from "./bel.ts";
+export type { BelConfig } from "./bel.ts";
+export { createJevRuntime } from "./jev.ts";
+export type { JevOptions, JevRuntime } from "./jev.ts";

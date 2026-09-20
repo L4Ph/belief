@@ -212,3 +212,36 @@ test("errors carry the diagnostic code and a position", () => {
     expect(error.format("f.bel")).toMatch(/^f\.bel:1:\d+: missing-fallback: /);
   }
 });
+
+test("the conjoin strategy asks for the conjunction as one question", () => {
+  const source = `flow f(t: Ticket): Action
+  "the user is angry" & "asks for a refund" @ 0.7 -> refund(t)
+  _ -> reply("ok")
+`;
+  const output = generate(parseBel(source), { source, andStrategy: "conjoin" });
+  expect(output).toContain(
+    `{ id: "2", type: "noul", text: "the user is angry and asks for a refund" }`,
+  );
+  expect(output).toContain("if ($b[2].value >= 0.7) {");
+  expect(output).not.toContain("composeAnd");
+});
+
+test("conjoin falls back to multiplication for operand shapes it cannot phrase", () => {
+  const source = `flow f(t: Ticket): Action
+  ~"a" & "b" -> reply("a")
+  _ -> reply("b")
+`;
+  const output = generate(parseBel(source), { source, andStrategy: "conjoin" });
+  expect(output).toContain("__bel.composeAnd(__bel.negate($b[0]), $b[1])");
+});
+
+test("a score used as a bare belief is reported", () => {
+  expect(() =>
+    compile(`flow f(t: Ticket): Action
+  let urgency = score "how urgent?" in low | high
+
+  urgency -> reply("a")
+  _ -> reply("b")
+`),
+  ).toThrow(/is a score; compare it with one of its levels/);
+});
