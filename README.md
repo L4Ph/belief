@@ -5,11 +5,12 @@ compiled to plain TypeScript.
 
 This repository is a Vite+ / pnpm monorepo:
 
-| Package             | Role                                                                          |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `packages/compiler` | `@bel/compiler` — `.bel` source to TypeScript (dev dependency)                |
-| `packages/runtime`  | `@bel/runtime` — `__bel` runtime, live Jev adapter (production dependency)    |
-| `packages/testkit`  | `@bel/testkit` — mock / cassette / confidence-floor runtimes (dev dependency) |
+| Package             | Role                                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `packages/compiler` | `@bel/compiler` — `.bel` source to TypeScript (dev dependency)                                              |
+| `packages/runtime`  | `@bel/runtime` — `__bel` runtime, live Jev adapter (production dependency)                                  |
+| `packages/testkit`  | `@bel/testkit` — mock / cassette / confidence-floor runtimes (dev dependency)                               |
+| `packages/hono`     | `@bel/hono` — the `route` target: a route table on Hono, decided by the bel runtime (production dependency) |
 
 ## What it looks like
 
@@ -36,12 +37,13 @@ flow will ask are known before it runs.
 
 ## Examples
 
-| Example                                      | What it shows                                                                                                                                      |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`examples/support`](examples/support)       | beliefs combined with `&`, a `score` compared against a level, a threshold and a fallback; `vp run demo "…"` shows why a message went where it did |
-| [`examples/moderation`](examples/moderation) | a `choice` comparison, a high threshold, and a `confidence_floor` that changes the outcome                                                         |
-| [`examples/triage`](examples/triage)         | nested guards, four destinations, still one call to the model                                                                                      |
-| [`examples/leads`](examples/leads)           | a five-level rubric, and a recorded model answer replayed as a regression test                                                                     |
+| Example                                      | What it shows                                                                                                                                       |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`examples/support`](examples/support)       | beliefs combined with `&`, a `score` compared against a level, a threshold and a fallback; `vp run demo "…"` shows why a message went where it did  |
+| [`examples/moderation`](examples/moderation) | a `choice` comparison, a high threshold, and a `confidence_floor` that changes the outcome                                                          |
+| [`examples/triage`](examples/triage)         | nested guards, four destinations, still one call to the model                                                                                       |
+| [`examples/leads`](examples/leads)           | a five-level rubric, and a recorded model answer replayed as a regression test                                                                      |
+| [`examples/site`](examples/site)             | `route` on Hono: one batched Jev call picks the page (rendered with hono/html, in Japanese), and a path route stays a path; `vp run live` serves it |
 
 Each one commits the generated TypeScript next to its `.bel` source, so the
 compiler's output is readable without running anything. A test in the compiler

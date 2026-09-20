@@ -1,0 +1,27 @@
+{
+  "name": "@bel-example/site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The bel site: one batched Jev call picks the page, hono/html renders it, and a path route stays a path.",
+  "type": "module",
+  "scripts": {
+    "build": "bel build site.bel",
+    "test": "vp test",
+    "check": "vp check",
+    "live": "node --env-file=../../.env main.ts"
+  },
+  "dependencies": {
+    "@bel/hono": "workspace:*",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.8"
+  },
+  "devDependencies": {
+    "@bel/compiler": "workspace:*",
+    "@bel/runtime": "workspace:*",
+    "@bel/testkit": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

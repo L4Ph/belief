@@ -1,0 +1,22 @@
+// The bel site, routed by meaning. The URL chooses nothing: every `route "…"`
+// below is asked about in one Jev call, and the first one over its threshold
+// answers. Descriptions are read in order, so specific intents come first and
+// the broad "just looking" one comes last. Path routes stay deterministic and
+// never reach the model.
+//
+//   bel build site.bel     # -> site.bel.ts, a route table
+//   vp run live            # serve it on :8787 and try different requests
+
+// `(c)` is left unannotated on purpose: the emitted `app.use` middleware gives
+// it the app's context type, so `c.get("jev")` is the decision.
+import { home, install, spec, notFound } from "./views.ts"
+
+route "bel のインストール方法や動かし方を知りたい人" (c) -> c.html(install(c.get("jev")))
+route "言語仕様や RFC を探している人" (c) -> c.html(spec(c.get("jev")))
+route "機械可読なサイト情報を求めるクライアント" (c) -> c.json({ name: "bel", spec: "docs/rfc/0001-bel-v0.md" })
+route "特に用事がなくトップページを見に来た人" (c) -> c.html(home(c.get("jev")))
+
+// A path route: the one request here that is decided without asking anyone.
+route "/robots.txt" (c) -> c.text("User-agent: *\nAllow: /\n")
+
+route _ (c) -> c.html(notFound(c.get("jev")), 404)
