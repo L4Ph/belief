@@ -10,7 +10,7 @@ repository = "https://github.com/your-name/belief"
 
 [grammars.bel]
 repository = "file:///Users/r5/Documents/git/belief"
-rev = "PLACEHOLDER_REV"
+rev = "10b066918052673aae2536432f8befc95f7a4a85"
 path = "editors/tree-sitter-bel"
 
 [language_servers.bel]
